@@ -31,6 +31,12 @@ class ShortTermMemory(Memory):
         self.n = n
         self.short_term_memory = deque()
 
+    async def aprocess_step(self, pre_step: bool = False):
+        """
+        Asynchronous version of process_step
+        """
+        return self.process_step(pre_step=pre_step)
+
     def process_step(self, pre_step: bool = False):
         """
         Process the step of the agent :

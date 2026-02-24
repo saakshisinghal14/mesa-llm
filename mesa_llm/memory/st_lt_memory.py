@@ -72,28 +72,39 @@ class STLTMemory(Memory):
 
         self.llm.system_prompt = self.system_prompt
 
-    def _update_long_term_memory(self):
+    def _build_consolidation_prompt(self) -> str:
         """
-        Update the long term memory by summarizing the short term memory with a LLM
+        Prompt builder function to reduce redundancy
         """
-
-        prompt = f"""
+        return f"""
             Short term memory:
                 {self.format_short_term()}
             Long term memory:
                 {self.long_term_memory}
-            """
+        """
 
+    def _update_long_term_memory(self):
+        """
+        Update the long term memory by summarizing the short term memory with a LLM
+        """
+        prompt = self._build_consolidation_prompt()
         self.long_term_memory = self.llm.generate(prompt)
 
-    def process_step(self, pre_step: bool = False):
+    async def _aupdate_long_term_memory(self):
         """
-        Process the step of the agent :
-        - Add the new entry to the short term memory
-        - Consolidate the memory if the short term memory is over capacity
-        - Display the new entry
+        Async Function to update long term memory
         """
+        prompt = self._build_consolidation_prompt()
+        self.long_term_memory = await self.llm.agenerate(prompt)
 
+    def _process_step_core(self, pre_step: bool):
+        """
+        Shared core logic for process_step and aprocess_step
+        Update short-term memory and decide if consolidation is needed.
+
+        Returns:
+            "(new_entry, should_consolidate)"
+        """
         # Add the new entry to the short term memory
         if pre_step:
             new_entry = MemoryEntry(
@@ -103,35 +114,60 @@ class STLTMemory(Memory):
             )
             self.short_term_memory.append(new_entry)
             self.step_content = {}
-            return
+            return None, False
+        if not self.short_term_memory or self.short_term_memory[-1].step is not None:
+            return None, False
+        pre_step_entry = self.short_term_memory.pop()
+        self.step_content.update(pre_step_entry.content)
+        new_entry = MemoryEntry(
+            agent=self.agent,
+            content=self.step_content,
+            step=self.agent.model.steps,
+        )
 
-        elif not self.short_term_memory[-1].content.get("step", None):
-            pre_step_entry = self.short_term_memory.pop()
-            self.step_content.update(pre_step_entry.content)
-            new_entry = MemoryEntry(
-                agent=self.agent,
-                content=self.step_content,
-                step=self.agent.model.steps,
-            )
+        self.short_term_memory.append(new_entry)
+        self.step_content = {}
 
-            self.short_term_memory.append(new_entry)
-            self.step_content = {}
+        should_consolidate = False
+        if (
+            len(self.short_term_memory)
+            > self.capacity + (self.consolidation_capacity or 0)
+            and self.consolidation_capacity
+        ):
+            self.short_term_memory.popleft()
+            should_consolidate = True
 
-            # Consolidate memory if the short term memory is over capacity
-            if (
-                len(self.short_term_memory)
-                > self.capacity + (self.consolidation_capacity or 0)
-                and self.consolidation_capacity
-            ):
-                self.short_term_memory.popleft()
-                self._update_long_term_memory()
+        elif (
+            len(self.short_term_memory) > self.capacity
+            and not self.consolidation_capacity
+        ):
+            self.short_term_memory.popleft()
 
-            elif len(self.short_term_memory) > self.capacity:
-                self.short_term_memory.popleft()
+        return new_entry, should_consolidate
 
-            # Display the new entry
-            if self.display:
-                new_entry.display()
+    def process_step(self, pre_step: bool = False):
+        """
+        Synchronous memory step handler
+        """
+        new_entry, should_consolidate = self._process_step_core(pre_step)
+
+        if should_consolidate:
+            self._update_long_term_memory()
+
+        if new_entry and self.display:
+            new_entry.display()
+
+    async def aprocess_step(self, pre_step: bool = False):
+        """
+        Async memory step handler (non-blocking consolidation)
+        """
+        new_entry, should_consolidate = self._process_step_core(pre_step)
+
+        if should_consolidate:
+            await self._aupdate_long_term_memory()
+
+        if new_entry and self.display:
+            new_entry.display()
 
     def format_long_term(self) -> str:
         """

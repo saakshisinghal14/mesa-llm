@@ -25,3 +25,15 @@ This example demonstrates:
 - Agent-to-agent communication
 - LLM-based negotiation strategies
 - Dynamic pricing and offer-counteroffer mechanisms
+
+## Sugarscrap-g1mt Model
+
+Implementation of Epstein & Axtell’s classic Sugarscape (G1MT) model, where Trader agents harvest resources (Sugar & Spice), consume them according to metabolic needs, and trade with neighbors based on economic rationality (MRS).
+
+**Location:** [examples/sugarscrap_g1mt](https://github.com/mesa/mesa-llm/tree/main/examples/sugarscrap_g1mt)
+
+ This example demonstrates:
+- LLM-powered survival decision-making
+- Resource regeneration and environmental dynamics
+- Marginal Rate of Substitution (MRS)-driven economic behavior
+- Emergent price equilibrium and wealth distribution

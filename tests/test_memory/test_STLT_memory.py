@@ -67,6 +67,8 @@ class TestSTLTMemory:
             llm_model="provider/test_model",
         )
 
+        memory.llm = mock_llm
+
         # Add memories to trigger consolidation
         with patch("rich.console.Console"):
             for i in range(5):

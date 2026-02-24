@@ -160,7 +160,7 @@ class CoTReasoning(Reasoning):
         )
 
         chaining_message = rsp.choices[0].message.content
-        self.agent.memory.add_to_memory(type="Plan", content=chaining_message)
+        await self.agent.memory.aadd_to_memory(type="Plan", content=chaining_message)
 
         # Pass plan content to agent for display
         if hasattr(self.agent, "_step_display_data"):
@@ -175,6 +175,8 @@ class CoTReasoning(Reasoning):
         response_message = rsp.choices[0].message
         cot_plan = Plan(step=step, llm_plan=response_message, ttl=1)
 
-        self.agent.memory.add_to_memory(type="Plan-Execution", content=str(cot_plan))
+        await self.agent.memory.aadd_to_memory(
+            type="Plan-Execution", content=str(cot_plan)
+        )
 
         return cot_plan

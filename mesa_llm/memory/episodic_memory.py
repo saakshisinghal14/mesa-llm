@@ -60,31 +60,51 @@ class EpisodicMemory(Memory):
             Only assess based on the entry's content and its value to the task at hand. Ignore style, grammar, or tone.
             """
 
-    def grade_event_importance(self, type: str, content: dict) -> float:
+    def _build_grade_prompt(self, type: str, content: dict) -> str:
         """
-        Grade this event based on the content respect to the previous memory entries
+        This helper assembles a prompt that includes the event type, event content,
+        and up to the five most recent memory entries for contextual grounding.
+        It is shared by both synchronous and asynchronous grading methods to
+        avoid duplicated prompt-construction logic.
         """
-        if len(self.memory_entries) in range(5):
+        if len(self.memory_entries) > 0:
+            entries = list(self.memory_entries)[-5:]
             previous_entries = "previous memory entries:\n\n".join(
-                [str(entry) for entry in self.memory_entries]
-            )
-        elif len(self.memory_entries) > 5:
-            previous_entries = "previous memory entries:\n\n".join(
-                [str(entry) for entry in self.memory_entries[-5:]]
+                [str(entry) for entry in entries]
             )
         else:
             previous_entries = "No previous memory entries"
 
-        prompt = f"""
+        return f"""
             grade the importance of the following event on a scale from 1 to 5:
             {type}: {content}
             ------------------------------
             {previous_entries}
             """
 
+    def grade_event_importance(self, type: str, content: dict) -> float:
+        """
+        Grade this event based on the content respect to the previous memory entries
+        """
+        prompt = self._build_grade_prompt(type, content)
         self.llm.system_prompt = self.system_prompt
 
         rsp = self.agent.llm.generate(
+            prompt=prompt,
+            response_format=EventGrade,
+        )
+
+        formatted_response = json.loads(rsp.choices[0].message.content)
+        return formatted_response["grade"]
+
+    async def agrade_event_importance(self, type: str, content: dict) -> float:
+        """
+        Asynchronous version of grade_event_importance
+        """
+        prompt = self._build_grade_prompt(type, content)
+        self.llm.system_prompt = self.system_prompt
+
+        rsp = await self.agent.llm.agenerate(
             prompt=prompt,
             response_format=EventGrade,
         )
@@ -112,6 +132,13 @@ class EpisodicMemory(Memory):
 
         super().add_to_memory(type, content)
 
+    async def aadd_to_memory(self, type: str, content: dict):
+        """
+        Async version of add_to_memory
+        """
+        content["importance"] = await self.agrade_event_importance(type, content)
+        super().add_to_memory(type, content)
+
     def get_prompt_ready(self) -> str:
         return f"Top {self.considered_entries} memory entries:\n\n" + "\n".join(
             [
@@ -131,6 +158,15 @@ class EpisodicMemory(Memory):
                 if "message" in entry.content
             ]
         )
+
+    async def aprocess_step(self, pre_step: bool = False):
+        """
+        Asynchronous version of process_step
+        """
+        if pre_step:
+            await self.aadd_to_memory(type="observation", content=self.step_content)
+            self.step_content = {}
+            return
 
     def process_step(self, pre_step: bool = False):
         """

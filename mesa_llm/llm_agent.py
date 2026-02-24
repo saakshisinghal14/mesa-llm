@@ -79,6 +79,28 @@ class LLMAgent(Agent):
     def __str__(self):
         return f"LLMAgent {self.unique_id}"
 
+    async def aapply_plan(self, plan: Plan) -> list[dict]:
+        """
+        Asynchronous version of apply_plan.
+        """
+        self._current_plan = plan
+
+        tool_call_resp = await self.tool_manager.acall_tools(
+            agent=self, llm_response=plan.llm_plan
+        )
+
+        await self.memory.aadd_to_memory(
+            type="action",
+            content={
+                k: v
+                for tool_call in tool_call_resp
+                for k, v in tool_call.items()
+                if k not in ["tool_call_id", "role"]
+            },
+        )
+
+        return tool_call_resp
+
     def apply_plan(self, plan: Plan) -> list[dict]:
         """
         Execute the plan in the simulation.
@@ -104,17 +126,27 @@ class LLMAgent(Agent):
 
         return tool_call_resp
 
-    def generate_obs(self) -> Observation:
+    def _build_observation(self):
         """
-        Returns an instance of the Observation dataclass enlisting everything the agent can see in the model in that step.
+        Construct the observation data visible to the agent at the current model step.
 
-        If the agents vision is set to anything above 0, the agent will get the details of all agents falling in that radius.
-        If the agents vision is set to -1, then the agent will get the details of all the agents present in the simulation at that step.
-        If it is set to 0 or None, then no information is returned to the agent.
+        This method encapsulates the shared logic used by both sync and
+        async observation generation.
+        This method constructs the agent's self state and determines which other
+        agents are observable based on the configured vision:
 
+        - vision > 0:
+            The agent observes all agents within the specified vision radius.
+        - vision == -1:
+            The agent observes all agents present in the simulation.
+        - vision == 0 or vision is None:
+            The agent observes no other agents.
+
+        The method supports grid-based and continuous spaces and builds a local
+        state representation for all visible neighboring agents.
+
+        Returns self_state and local_state of the agent
         """
-        step = self.model.steps
-
         self_state = {
             "agent_unique_id": self.unique_id,
             "system_prompt": self.system_prompt,
@@ -151,7 +183,34 @@ class LLMAgent(Agent):
                     s for s in i.internal_state if not s.startswith("_")
                 ],
             }
+        return self_state, local_state
 
+    async def agenerate_obs(self) -> Observation:
+        """
+        This method builds the agent's observation using the shared observation
+        construction logic, stores it in the agent's memory module using
+        async memory operations, and returns it as an Observation instance.
+        """
+        step = self.model.steps
+        self_state, local_state = self._build_observation()
+        await self.memory.aadd_to_memory(
+            type="observation",
+            content={
+                "self_state": self_state,
+                "local_state": local_state,
+            },
+        )
+
+        return Observation(step=step, self_state=self_state, local_state=local_state)
+
+    def generate_obs(self) -> Observation:
+        """
+        This method delegates observation construction to the shared observation
+        builder, stores the resulting observation in the agent's memory module,
+        and returns it as an Observation instance.
+        """
+        step = self.model.steps
+        self_state, local_state = self._build_observation()
         # Add to memory (memory handles its own display separately)
         self.memory.add_to_memory(
             type="observation",
@@ -162,6 +221,22 @@ class LLMAgent(Agent):
         )
 
         return Observation(step=step, self_state=self_state, local_state=local_state)
+
+    async def asend_message(self, message: str, recipients: list[Agent]) -> str:
+        """
+        Asynchronous version of send_message.
+        """
+        for recipient in [*recipients, self]:
+            await recipient.memory.aadd_to_memory(
+                type="message",
+                content={
+                    "message": message,
+                    "sender": self,
+                    "recipients": recipients,
+                },
+            )
+
+        return f"{self} → {recipients} : {message}"
 
     def send_message(self, message: str, recipients: list[Agent]) -> str:
         """
@@ -178,6 +253,18 @@ class LLMAgent(Agent):
             )
 
         return f"{self} → {recipients} : {message}"
+
+    async def apre_step(self):
+        """
+        Asynchronous version of pre_step.
+        """
+        await self.memory.aprocess_step(pre_step=True)
+
+    async def apost_step(self):
+        """
+        Asynchronous version of post_step.
+        """
+        await self.memory.aprocess_step()
 
     def pre_step(self):
         """
@@ -198,12 +285,12 @@ class LLMAgent(Agent):
         Subclasses should override this method for custom async behavior.
         If not overridden, falls back to calling the synchronous step() method.
         """
-        self.pre_step()
+        await self.apre_step()
 
         if hasattr(self, "step") and self.__class__.step != LLMAgent.step:
             self.step()
 
-        self.post_step()
+        await self.apost_step()
 
     def __init_subclass__(cls, **kwargs):
         """
@@ -233,9 +320,9 @@ class LLMAgent(Agent):
                 """
                 Async wrapper for astep method.
                 """
-                self.pre_step()
+                await self.apre_step()
                 result = await user_astep(self, *args, **kwargs)
-                self.post_step()
+                await self.apost_step()
                 return result
 
             cls.astep = awrapped

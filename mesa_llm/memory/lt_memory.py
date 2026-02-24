@@ -45,12 +45,12 @@ class LongTermMemory(Memory):
 
         self.llm.system_prompt = self.system_prompt
 
-    def _update_long_term_memory(self):
+    def _build_consolidation_prompt(self) -> str:
         """
-        Update the long term memory by summarizing the short term memory with a LLM
+        Common function for both _update_long_term_memory() and _aupdate_long_term_memory()
+        that provides it with a common prompt to redeuce code redundancy
         """
-
-        prompt = f"""
+        return f"""
             This is the current Long term memory:
                 {self.long_term_memory}
             This is the new memory entry:
@@ -58,14 +58,27 @@ class LongTermMemory(Memory):
 
             """
 
+    def _update_long_term_memory(self):
+        """
+        Update the long term memory by summarizing the short term memory with a LLM
+        """
+        prompt = self._build_consolidation_prompt()
         self.long_term_memory = self.llm.generate(prompt)
+
+    async def _aupdate_long_term_memory(self):
+        """
+        Asynchronous version of _update_long_term_memory
+        """
+        prompt = self._build_consolidation_prompt()
+        self.long_term_memory = await self.llm.agenerate(prompt)
 
     def process_step(self, pre_step: bool = False):
         """
-        Process the step of the agent :
-        - Merge the new entry into the long term memory
-        - Display the new entry
+        Process the step of the agent:
+        - Merge the new entry into long term memory
+        - Display the new entry (Will display it only when a new entry is created in this call)
         """
+        created = False
 
         if pre_step:
             new_entry = MemoryEntry(
@@ -79,17 +92,48 @@ class LongTermMemory(Memory):
 
         elif self.buffer and self.buffer.step is None:
             self.step_content.update(self.buffer.content)
-            new_new_entry = MemoryEntry(
+            new_entry = MemoryEntry(
                 agent=self.agent,
                 content=self.step_content,
                 step=self.agent.model.steps,
             )
-            self.buffer = new_new_entry
+            self.buffer = new_entry
             self._update_long_term_memory()
             self.step_content = {}
+            created = True
 
-        # Display the new entry
-        if self.display:
+        if self.display and created:
+            self.buffer.display()
+
+    async def aprocess_step(self, pre_step: bool = False):
+        """
+        Asynchronous version of process_step (non-blocking)
+        """
+        created = False
+
+        if pre_step:
+            new_entry = MemoryEntry(
+                agent=self.agent,
+                content=self.step_content,
+                step=None,
+            )
+            self.buffer = new_entry
+            self.step_content = {}
+            return
+
+        elif self.buffer and self.buffer.step is None:
+            self.step_content.update(self.buffer.content)
+            new_entry = MemoryEntry(
+                agent=self.agent,
+                content=self.step_content,
+                step=self.agent.model.steps,
+            )
+            self.buffer = new_entry
+            await self._aupdate_long_term_memory()
+            self.step_content = {}
+            created = True
+
+        if self.display and created:
             self.buffer.display()
 
     def format_long_term(self) -> str:

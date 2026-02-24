@@ -153,6 +153,7 @@ class TestCoTReasoning:
         mock_agent.memory.format_long_term.return_value = "Long term memory"
         mock_agent.memory.format_short_term.return_value = "Short term memory"
         mock_agent.memory.add_to_memory = Mock()
+        mock_agent.memory.aadd_to_memory = AsyncMock()
         mock_agent.llm = Mock()
         mock_agent.tool_manager = Mock()
         mock_agent.tool_manager.get_all_tools_schema.return_value = {}

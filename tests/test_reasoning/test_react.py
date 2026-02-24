@@ -162,6 +162,7 @@ class TestReActReasoning:
         mock_agent.memory.get_prompt_ready.return_value = ["memory1"]
         mock_agent.memory.get_communication_history.return_value = ""
         mock_agent.memory.add_to_memory = Mock()
+        mock_agent.memory.aadd_to_memory = AsyncMock()
         mock_agent.llm = Mock()
         mock_agent.tool_manager = Mock()
         mock_agent.tool_manager.get_all_tools_schema.return_value = {}

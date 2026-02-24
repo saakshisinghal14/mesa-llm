@@ -138,7 +138,7 @@ class ReActReasoning(Reasoning):
 
         formatted_response = json.loads(rsp.choices[0].message.content)
 
-        self.agent.memory.add_to_memory(type="plan", content=formatted_response)
+        await self.agent.memory.aadd_to_memory(type="plan", content=formatted_response)
 
         # ---------------- execute the plan ----------------
         react_plan = await self.aexecute_tool_call(
