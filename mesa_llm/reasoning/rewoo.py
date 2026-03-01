@@ -137,7 +137,7 @@ class ReWOOReasoning(Reasoning):
         )
 
         self.agent.memory.add_to_memory(
-            type="plan", content=rsp.choices[0].message.content
+            type="plan", content={"plan": rsp.choices[0].message.content}
         )
 
         rewoo_plan = self.execute_tool_call(
@@ -180,7 +180,7 @@ class ReWOOReasoning(Reasoning):
         )
 
         self.agent.memory.add_to_memory(
-            type="plan", content=rsp.choices[0].message.content
+            type="plan", content={"plan": rsp.choices[0].message.content}
         )
 
         rewoo_plan = await self.aexecute_tool_call(

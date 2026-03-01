@@ -17,7 +17,7 @@ class MemoryEntry:
     A data structure that stores individual memory records with content, step number, and agent reference. Each entry includes `rich` formatting for display. Content is a nested dictionary of arbitrary depth containing the entry's information. Each entry is designed to hold all the information of a given step for an agent, but can also be used to store a single event if needed.
     """
 
-    content: dict
+    content: dict | str
     step: int | None
     agent: "LLMAgent"
 
@@ -43,6 +43,11 @@ class MemoryEntry:
             return lines
 
         lines = []
+
+        # Handle string content gracefully
+        if isinstance(self.content, str):
+            return self.content
+
         for key, value in self.content.items():
             if not value:
                 continue
@@ -133,10 +138,14 @@ class Memory(ABC):
     async def aprocess_step(self, pre_step: bool = False):
         return self.process_step(pre_step)
 
-    def add_to_memory(self, type: str, content: dict):
+    def add_to_memory(self, type: str, content: dict | str):
         """
         Add a new entry to the memory
         """
+        # Auto-wrap string content into a dict
+        if isinstance(content, str):
+            content = {type: content}
+
         if type == "observation":
             # Only store changed parts of observation
             changed_parts = {
@@ -149,5 +158,5 @@ class Memory(ABC):
             self.step_content[type] = content
 
     # Async Function wrapper for add_to_memory()
-    async def aadd_to_memory(self, type: str, content: dict):
+    async def aadd_to_memory(self, type: str, content: dict | str):
         return self.add_to_memory(type, content)

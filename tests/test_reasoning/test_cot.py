@@ -93,7 +93,7 @@ class TestCoTReasoning:
         # and our memory.add_to_memory should at least have been called once with type="observation"
         mock_memory.add_to_memory.assert_any_call(
             type="Observation",
-            content=str(obs),
+            content={"observation": str(obs)},
         )
 
     def test_plan_with_selected_tools(self):

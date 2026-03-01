@@ -89,3 +89,43 @@ class TestMemoryParent:
         # Should be non-empty step_content after adding to memory
         assert memory.step_content != {}
         assert "observation" in memory.step_content
+
+    def test_add_to_memory_string_auto_wrap(self):
+        """Test that add_to_memory auto-wraps string content into a dict."""
+        memory = MemoryMock(agent=mock_agent)
+        memory.add_to_memory("plan", "This is a raw string plan")
+
+        assert memory.step_content["plan"] == {"plan": "This is a raw string plan"}
+
+    def test_add_to_memory_dict_unchanged(self):
+        """Test that add_to_memory leaves dict content unchanged."""
+        memory = MemoryMock(agent=mock_agent)
+        content = {"action": "move_north", "reason": "exploring"}
+        memory.add_to_memory("action", content)
+
+        assert memory.step_content["action"] == content
+
+
+class TestMemoryEntryStringContent:
+    """Regression tests for MemoryEntry handling string content (issue #117)."""
+
+    def test_memory_entry_str_with_string_content(self):
+        """Test MemoryEntry.__str__() when content is a plain string."""
+        mock_ag = Mock()
+        entry = MemoryEntry(content="raw string from LLM", step=1, agent=mock_ag)
+
+        result = str(entry)
+        assert result == "raw string from LLM"
+
+    def test_memory_entry_str_with_dict_content(self):
+        """Test MemoryEntry.__str__() still works with dict content."""
+        mock_ag = Mock()
+        entry = MemoryEntry(
+            content={"observation": "test value", "plan": "do something"},
+            step=1,
+            agent=mock_ag,
+        )
+
+        result = str(entry)
+        assert "test value" in result
+        assert "observation" in result.lower() or "Observation" in result
