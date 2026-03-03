@@ -137,6 +137,12 @@ class Memory(ABC):
         """
         Add a new entry to the memory
         """
+        if not isinstance(content, dict):
+            raise TypeError(
+                "Expected 'content' to be dict, "
+                f"got {content.__class__.__name__}: {content!r}"
+            )
+
         if type == "observation":
             # Only store changed parts of observation
             changed_parts = {

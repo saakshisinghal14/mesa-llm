@@ -1,6 +1,8 @@
+import asyncio
 from typing import TYPE_CHECKING
 from unittest.mock import Mock
 
+import pytest
 from memory_utils import mock_agent
 
 from mesa_llm.memory.memory import Memory, MemoryEntry
@@ -89,3 +91,25 @@ class TestMemoryParent:
         # Should be non-empty step_content after adding to memory
         assert memory.step_content != {}
         assert "observation" in memory.step_content
+
+    def test_add_to_memory_rejects_non_dict_content(self):
+        memory = MemoryMock(agent=mock_agent)
+
+        with pytest.raises(TypeError) as exc_info:
+            memory.add_to_memory("plan", "raw string plan")
+
+        assert (
+            str(exc_info.value)
+            == "Expected 'content' to be dict, got str: 'raw string plan'"
+        )
+
+    def test_aadd_to_memory_rejects_non_dict_content(self):
+        memory = MemoryMock(agent=mock_agent)
+
+        with pytest.raises(TypeError) as exc_info:
+            asyncio.run(memory.aadd_to_memory("plan", "raw async string plan"))
+
+        assert (
+            str(exc_info.value)
+            == "Expected 'content' to be dict, got str: 'raw async string plan'"
+        )
