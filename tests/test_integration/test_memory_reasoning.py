@@ -15,8 +15,6 @@ import json
 from collections import deque
 from unittest.mock import AsyncMock, Mock
 
-import pytest
-
 from mesa_llm.memory.episodic_memory import EpisodicMemory
 from mesa_llm.memory.memory import Memory
 from mesa_llm.memory.st_lt_memory import STLTMemory
@@ -319,14 +317,14 @@ class TestReActWithSTLTMemory:
         agent.memory = memory
         return agent, memory, ReActReasoning(agent)
 
-    def test_get_prompt_ready_returns_list(self, monkeypatch):
-        """STLTMemory.get_prompt_ready() returns list (what ReAct expects)."""
+    def test_get_prompt_ready_returns_str(self, monkeypatch):
+        """STLTMemory.get_prompt_ready() returns a string memory snapshot."""
         _agent, memory, _reasoning = self._setup(monkeypatch)
         result = memory.get_prompt_ready()
-        assert isinstance(result, list)
+        assert isinstance(result, str)
 
     def test_memory_prompt_used_in_reasoning(self, monkeypatch):
-        """get_prompt_ready() list is used in ReAct prompt construction."""
+        """get_prompt_ready() string is wrapped and used in ReAct prompts."""
         _agent, memory, reasoning = self._setup(monkeypatch)
         memory.long_term_memory = "Agent explored north previously."
 
@@ -374,11 +372,7 @@ class TestReActWithSTLTMemory:
 
 
 class TestReActWithShortTermMemory:
-    """ReAct with ShortTermMemory - documents the known type mismatch.
-
-    ShortTermMemory.get_prompt_ready() returns str, but ReAct calls
-    .append() on it. This test documents the current behavior.
-    """
+    """ReAct with ShortTermMemory."""
 
     def _setup(self):
         memory = make_short_term_memory()
@@ -391,26 +385,19 @@ class TestReActWithShortTermMemory:
         result = memory.get_prompt_ready()
         assert isinstance(result, str)
 
-    def test_react_prompt_construction_fails_with_str_memory(self):
-        """ReAct assumes list from get_prompt_ready - fails with str backend.
-
-        This documents the known incompatibility: ReAct calls .append()
-        on the result of get_prompt_ready(), but ShortTermMemory returns
-        a str which does not have an append method.
-        """
+    def test_react_prompt_construction_handles_str_memory(self):
+        """ReAct wraps string memory into a prompt list and appends context."""
         _agent, _memory, reasoning = self._setup()
         obs = Observation(step=1, self_state={}, local_state={})
 
-        with pytest.raises(AttributeError, match="append"):
-            reasoning.get_react_prompt(obs)
+        prompt_list = reasoning.get_react_prompt(obs)
+        assert isinstance(prompt_list, list)
+        assert isinstance(prompt_list[0], str)
+        assert "current observation" in prompt_list[-1]
 
 
 class TestReActWithEpisodicMemory:
-    """ReAct with EpisodicMemory - documents the known type mismatch.
-
-    EpisodicMemory.get_prompt_ready() returns str, same issue as
-    ShortTermMemory.
-    """
+    """ReAct with EpisodicMemory."""
 
     def _setup(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "dummy")
@@ -438,13 +425,15 @@ class TestReActWithEpisodicMemory:
         result = memory.get_prompt_ready()
         assert isinstance(result, str)
 
-    def test_react_prompt_construction_fails_with_str_memory(self, monkeypatch):
-        """ReAct fails with EpisodicMemory - same type mismatch as ShortTermMemory."""
+    def test_react_prompt_construction_handles_str_memory(self, monkeypatch):
+        """ReAct wraps EpisodicMemory string context into a prompt list."""
         _agent, _memory, reasoning = self._setup(monkeypatch)
         obs = Observation(step=1, self_state={}, local_state={})
 
-        with pytest.raises(AttributeError, match="append"):
-            reasoning.get_react_prompt(obs)
+        prompt_list = reasoning.get_react_prompt(obs)
+        assert isinstance(prompt_list, list)
+        assert isinstance(prompt_list[0], str)
+        assert "current observation" in prompt_list[-1]
 
 
 # ===================================================================
@@ -458,9 +447,9 @@ class TestReWOOWithShortTermMemory:
     def _setup(self):
         memory = make_short_term_memory()
         agent = make_mock_agent(memory)
-        agent.generate_obs = Mock(
-            return_value=Observation(step=1, self_state={}, local_state={})
-        )
+        default_obs = Observation(step=1, self_state={}, local_state={})
+        agent.generate_obs = Mock(return_value=default_obs)
+        agent.agenerate_obs = AsyncMock(return_value=default_obs)
         return agent, memory, ReWOOReasoning(agent)
 
     def test_memory_prompt_used_in_reasoning(self):
@@ -520,9 +509,9 @@ class TestReWOOWithSTLTMemory:
         agent.tool_manager = Mock()
         agent.tool_manager.get_all_tools_schema.return_value = {}
         agent._step_display_data = {}
-        agent.generate_obs = Mock(
-            return_value=Observation(step=1, self_state={}, local_state={})
-        )
+        default_obs = Observation(step=1, self_state={}, local_state={})
+        agent.generate_obs = Mock(return_value=default_obs)
+        agent.agenerate_obs = AsyncMock(return_value=default_obs)
 
         memory = STLTMemory(
             agent=agent,
@@ -590,9 +579,9 @@ class TestReWOOWithEpisodicMemory:
         agent.tool_manager = Mock()
         agent.tool_manager.get_all_tools_schema.return_value = {}
         agent._step_display_data = {}
-        agent.generate_obs = Mock(
-            return_value=Observation(step=1, self_state={}, local_state={})
-        )
+        default_obs = Observation(step=1, self_state={}, local_state={})
+        agent.generate_obs = Mock(return_value=default_obs)
+        agent.agenerate_obs = AsyncMock(return_value=default_obs)
 
         memory = EpisodicMemory(
             agent=agent,

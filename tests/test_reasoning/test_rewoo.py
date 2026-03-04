@@ -498,9 +498,9 @@ class TestReWOOReasoning:
         """Test aplan falls back to agent.step_prompt like sync plan does."""
         mock_agent = Mock()
         mock_agent.step_prompt = "Default step prompt"
-        mock_agent.generate_obs.return_value = Observation(
-            step=1, self_state={}, local_state={}
-        )
+        default_obs = Observation(step=1, self_state={}, local_state={})
+        mock_agent.generate_obs.return_value = default_obs
+        mock_agent.agenerate_obs = AsyncMock(return_value=default_obs)
         mock_agent.memory = Mock()
         mock_agent.memory.format_long_term.return_value = "Long term memory"
         mock_agent.memory.format_short_term.return_value = "Short term memory"

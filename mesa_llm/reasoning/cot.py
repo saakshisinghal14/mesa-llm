@@ -170,7 +170,9 @@ class CoTReasoning(Reasoning):
         llm = self.agent.llm
 
         obs_str = str(obs)
-        await self.agent.memory.aadd_to_memory(type="Observation", content=obs_str)
+        await self.agent.memory.aadd_to_memory(
+            type="Observation", content={"content": obs_str}
+        )
         system_prompt = self.get_cot_system_prompt(obs)
         llm.system_prompt = system_prompt
 
