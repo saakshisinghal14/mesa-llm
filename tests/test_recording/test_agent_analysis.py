@@ -25,7 +25,9 @@ class TestAgentViewer:
         assert 123 in viewer.agent_events
         assert 456 in viewer.agent_events
 
-    def test_init_with_pickle_file_warns(self, temp_recording_file, sample_recording_data):
+    def test_init_with_pickle_file_warns(
+        self, temp_recording_file, sample_recording_data
+    ):
         """Test pickle recordings load with a warning."""
         _, pkl_path = temp_recording_file
 
