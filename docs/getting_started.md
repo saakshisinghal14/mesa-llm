@@ -9,6 +9,14 @@ Agents in Mesa-LLM are still standard Mesa agents. The only difference is how de
 If you want a high-level understanding of Mesa-LLM structure and capabilities, start here:
 - [Overview of Mesa-LLM Library](overview.md)
 
+## LLM Backend Setup
+Mesa-LLM leverages various LLM providers through the LiteLLM library. To run the examples and tutorials, you typically need one of the following:
+
+- **Local LLM (Default in Tutorials)**: [Ollama](https://ollama.com) is used for local inference. It must be installed and running on your machine.
+- **Cloud LLM**: Providers like OpenAI, Anthropic, or Gemini require an API key set in your environment variables.
+
+Refer to the [Prerequisites section](tutorials/first_model.md#prerequisites) in the first tutorial for more details on Ollama setup.
+
 ## Tutorials
 If you want to learn Mesa-LLM step by step, follow these tutorials:
 - [Creating your First Mesa-LLM Model](tutorials/first_model.md)

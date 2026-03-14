@@ -48,6 +48,20 @@ Action execution and environments are intentionally deferred to later tutorials.
 ## Tutorial Setup
 Create and activate a virtual environment. Python version 3.12 or higher is required.
 
+## Prerequisites
+
+This tutorial uses **Ollama** as the default LLM provider. To follow along, you must have Ollama installed and running on your machine.
+
+1. **Install Ollama**: Follow the instructions at [ollama.com](https://ollama.com).
+2. **Pull the Model**: Open a terminal and run:
+   ```bash
+   ollama pull llama3
+   ```
+3. **Run Ollama**: Ensure the Ollama service is running. By default, it serves on `http://localhost:11434`.
+
+> [!NOTE]
+> If you prefer to use a cloud-hosted provider like **OpenAI** or **Gemini**, you will need to provide an API key and update the `llm_model` parameter in the code accordingly.
+
 ## Install Mesa-LLM and required packages
 
 Install Mesa-LLM

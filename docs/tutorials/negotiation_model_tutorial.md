@@ -37,6 +37,18 @@ This `Model` simulates a basic negotiation scenario involving:
 ## Tutorial Setup
 Ensure you are using Python 3.12 or later.
 
+## Prerequisites
+
+Like the introductory tutorial, this guide uses **Ollama** as the default LLM provider.
+
+- Ensure **Ollama** is installed and running (`http://localhost:11434`).
+- Pull the required model:
+  ```bash
+  ollama pull llama3
+  ```
+
+For detailed setup instructions, refer to the [Prerequisites section of the first tutorial](first_model.md#prerequisites).
+
 ## Install Mesa-LLM and required packages
 
 Install Mesa-LLM
