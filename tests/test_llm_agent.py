@@ -60,12 +60,125 @@ def test_apply_plan_adds_to_memory(monkeypatch):
 
     assert resp == fake_response
 
-    assert {
-        "tool": "foo",
-        "argument": "bar",
-    } in agent.memory.step_content.values() or agent.memory.step_content == {
-        "tool": "foo",
-        "argument": "bar",
+    action_content = agent.memory.step_content.get("action")
+    assert action_content is not None
+    assert "tool_calls" in action_content
+    assert len(action_content["tool_calls"]) == 1
+    assert action_content["tool_calls"][0] == {"tool": "foo", "argument": "bar"}
+
+
+def test_apply_plan_preserves_multiple_tool_calls(monkeypatch):
+    """All tool call results must be preserved when the LLM returns >1 tool call."""
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy")
+
+    class DummyModel(Model):
+        def __init__(self):
+            super().__init__(seed=42)
+            self.grid = MultiGrid(5, 5, torus=False)
+
+    model = DummyModel()
+    agent = LLMAgent.create_agents(
+        model,
+        n=1,
+        reasoning=ReActReasoning,
+        system_prompt="test",
+        vision=-1,
+        internal_state=["test_state"],
+    ).to_list()[0]
+    model.grid.place_agent(agent, (1, 1))
+    agent.memory = ShortTermMemory(agent=agent, n=5, display=False)
+
+    fake_response = [
+        {
+            "tool_call_id": "1",
+            "role": "tool",
+            "name": "move_one_step",
+            "response": "agent moved to (3, 4)",
+        },
+        {
+            "tool_call_id": "2",
+            "role": "tool",
+            "name": "arrest_citizen",
+            "response": "Citizen 12 arrested",
+        },
+    ]
+    monkeypatch.setattr(
+        agent.tool_manager, "call_tools", lambda agent, llm_response: fake_response
+    )
+
+    plan = Plan(step=0, llm_plan="do something")
+    agent.apply_plan(plan)
+
+    action_content = agent.memory.step_content.get("action")
+    assert action_content is not None
+    assert "tool_calls" in action_content
+    assert len(action_content["tool_calls"]) == 2
+    assert action_content["tool_calls"][0] == {
+        "name": "move_one_step",
+        "response": "agent moved to (3, 4)",
+    }
+    assert action_content["tool_calls"][1] == {
+        "name": "arrest_citizen",
+        "response": "Citizen 12 arrested",
+    }
+
+
+@pytest.mark.asyncio
+async def test_aapply_plan_preserves_multiple_tool_calls(monkeypatch):
+    """Async variant: all tool call results must be preserved."""
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy")
+
+    class DummyModel(Model):
+        def __init__(self):
+            super().__init__(seed=42)
+            self.grid = MultiGrid(5, 5, torus=False)
+
+    model = DummyModel()
+    agent = LLMAgent.create_agents(
+        model,
+        n=1,
+        reasoning=ReActReasoning,
+        system_prompt="test",
+        vision=-1,
+        internal_state=["test_state"],
+    ).to_list()[0]
+    model.grid.place_agent(agent, (1, 1))
+    agent.memory = ShortTermMemory(agent=agent, n=5, display=False)
+
+    fake_response = [
+        {
+            "tool_call_id": "1",
+            "role": "tool",
+            "name": "move_one_step",
+            "response": "agent moved to (3, 4)",
+        },
+        {
+            "tool_call_id": "2",
+            "role": "tool",
+            "name": "arrest_citizen",
+            "response": "Citizen 12 arrested",
+        },
+    ]
+
+    async def fake_acall_tools(agent, llm_response):
+        return fake_response
+
+    monkeypatch.setattr(agent.tool_manager, "acall_tools", fake_acall_tools)
+
+    plan = Plan(step=0, llm_plan="do something")
+    await agent.aapply_plan(plan)
+
+    action_content = agent.memory.step_content.get("action")
+    assert action_content is not None
+    assert "tool_calls" in action_content
+    assert len(action_content["tool_calls"]) == 2
+    assert action_content["tool_calls"][0] == {
+        "name": "move_one_step",
+        "response": "agent moved to (3, 4)",
+    }
+    assert action_content["tool_calls"][1] == {
+        "name": "arrest_citizen",
+        "response": "Citizen 12 arrested",
     }
 
 
