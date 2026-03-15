@@ -300,11 +300,11 @@ def test_send_message_updates_both_agents_memory(monkeypatch):
     )
     assert sender_call["type"] == "message"
     assert sender_call["content"]["message"] == "hello"
-    assert sender_call["content"]["sender"] is sender
-    assert sender_call["content"]["recipients"] == [recipient]
+    assert sender_call["content"]["sender"] == sender.unique_id
+    assert sender_call["content"]["recipients"] == [recipient.unique_id]
     assert recipient_call["type"] == "message"
     assert recipient_call["content"]["message"] == "hello"
-    assert recipient_call["content"]["sender"] is sender
+    assert recipient_call["content"]["sender"] == sender.unique_id
     assert "recipients" not in recipient_call["content"]
 
 
@@ -373,11 +373,11 @@ async def test_asend_message_updates_both_agents_memory(monkeypatch):
     )
     assert sender_call["type"] == "message"
     assert sender_call["content"]["message"] == "hello"
-    assert sender_call["content"]["sender"] is sender
-    assert sender_call["content"]["recipients"] == [recipient]
+    assert sender_call["content"]["sender"] == sender.unique_id
+    assert sender_call["content"]["recipients"] == [recipient.unique_id]
     assert recipient_call["type"] == "message"
     assert recipient_call["content"]["message"] == "hello"
-    assert recipient_call["content"]["sender"] is sender
+    assert recipient_call["content"]["sender"] == sender.unique_id
     assert "recipients" not in recipient_call["content"]
 
 
@@ -920,13 +920,13 @@ def test_send_message_stores_serializable_ids(monkeypatch):
     sender.send_message("hello", recipients=[recipient])
 
     assert captured["sender"] == 10
-    assert captured["recipients"] == [20]
     assert captured["message"] == "hello"
 
     # Must not raise TypeError when serializing
     data = json.loads(json.dumps(captured))
     assert data["sender"] == 10
-    assert data["recipients"] == [20]
+    assert "recipients" not in data  # recipients only stored in sender, not recipient
+    assert data["message"] == "hello"
 
 
 @pytest.mark.asyncio
@@ -948,9 +948,12 @@ async def test_asend_message_stores_serializable_ids(monkeypatch):
     await sender.asend_message("hello", recipients=[recipient])
 
     assert captured["sender"] == 10
-    assert captured["recipients"] == [20]
+    assert (
+        "recipients" not in captured
+    )  # recipients only stored in sender, not recipient
     assert captured["message"] == "hello"
 
     data = json.loads(json.dumps(captured))
     assert data["sender"] == 10
-    assert data["recipients"] == [20]
+    assert data["message"] == "hello"
+    assert "recipients" not in data
