@@ -69,14 +69,10 @@ class ToolManager:
     def get_all_tools_schema(
         self, selected_tools: list[str] | None = None
     ) -> list[dict]:
-        if selected_tools:
-            selected_tools_schema = [
-                self.tools[tool].__tool_schema__ for tool in selected_tools
-            ]
-            return selected_tools_schema
+        if selected_tools is not None:
+            return [self.tools[tool].__tool_schema__ for tool in selected_tools]
 
-        else:
-            return [fn.__tool_schema__ for fn in self.tools.values()]
+        return [fn.__tool_schema__ for fn in self.tools.values()]
 
     def call(self, name: str, arguments: dict) -> str:
         """Call a registered tool with validated args"""
