@@ -121,3 +121,58 @@ class TestToolDecoractor:
         )
 
         _GLOBAL_TOOL_REGISTRY.clear()
+
+    def test_parse_docstring_ignore_agent_true(self):
+        def tool_func(agent, x: int) -> str:
+            """Short summary.
+
+            Args:
+                x: An integer input.
+
+            Returns:
+                A string.
+            """
+            return str(x)
+
+        summary, param_desc, _ = _parse_docstring(tool_func, ignore_agent=True)
+        assert summary == "Short summary."
+        assert "x" in param_desc
+        assert "agent" not in param_desc
+
+    def test_parse_docstring_ignore_agent_false(self):
+        def tool_func(agent, x: int) -> str:
+            """Short summary.
+
+            Args:
+                x: An integer input.
+
+            Returns:
+                A string.
+            """
+            return str(x)
+
+        with pytest.raises(DocstringParsingError):
+            _parse_docstring(tool_func, ignore_agent=False)
+
+    def test_tool_agent_docstring_not_required(self):
+        _GLOBAL_TOOL_REGISTRY.clear()
+
+        @tool
+        def move(agent, direction: str) -> str:
+            """Move in a direction.
+
+            Args:
+                direction: The direction to move.
+
+            Returns:
+                A result string.
+            """
+            return direction
+
+        assert "move" in _GLOBAL_TOOL_REGISTRY
+        schema = move.__tool_schema__
+        params = schema["function"]["parameters"]
+        assert "agent" not in params["properties"]
+        assert "agent" not in params["required"]
+
+        _GLOBAL_TOOL_REGISTRY.clear()

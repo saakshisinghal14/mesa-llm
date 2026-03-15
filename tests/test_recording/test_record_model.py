@@ -1,21 +1,11 @@
 """Tests for the @record_model decorator."""
 
-import tempfile
-from pathlib import Path
 from unittest.mock import Mock, patch
 
-import pytest
 from mesa.model import Model
 
 from mesa_llm.recording.record_model import _attach_recorder_to_agents, record_model
 from mesa_llm.recording.simulation_recorder import SimulationRecorder
-
-
-@pytest.fixture
-def temp_dir():
-    """Create a temporary directory for test outputs."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
 
 
 class TestAttachRecorderToAgents:
@@ -126,6 +116,7 @@ class TestRecordModelDecorator:
 
         # Mock the recorder to track calls
         model.recorder = Mock(spec=SimulationRecorder)
+        model.recorder.events = []  # instance attr not in class spec; set explicitly
 
         # Call step
         model.step()

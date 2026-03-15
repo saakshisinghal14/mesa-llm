@@ -1,3 +1,4 @@
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -7,7 +8,6 @@ from litellm.exceptions import (
     RateLimitError,
     Timeout,
 )
-from rich.console import Console
 from tenacity import AsyncRetrying, retry, retry_if_exception_type, wait_exponential
 
 RETRYABLE_EXCEPTIONS = (
@@ -17,7 +17,7 @@ RETRYABLE_EXCEPTIONS = (
 )
 
 load_dotenv()
-console = Console()
+logger = logging.getLogger(__name__)
 
 
 class ModuleLLM:
@@ -37,40 +37,54 @@ class ModuleLLM:
         Initialize the LLM module
 
         Args:
-            llm_model: The model to use for the LLM in the format of {provider}/{LLM}
+            llm_model: The model to use for the LLM in the format
+                "{provider}/{model}" (for example, "openai/gpt-4o").
             api_base: The API base to use if the LLM provider is Ollama
             system_prompt: The system prompt to use for the LLM
+
+        Raises:
+            ValueError: If llm_model is not in the expected "{provider}/{model}"
+                format, or if the provider API key is missing.
         """
         self.api_base = api_base
         self.llm_model = llm_model
         self.system_prompt = system_prompt
+
+        if "/" not in llm_model:
+            raise ValueError(
+                f"Invalid model format '{llm_model}'. "
+                "Expected '{provider}/{model}', e.g. 'openai/gpt-4o'."
+            )
+
         provider = self.llm_model.split("/")[0].upper()
 
         if provider in ["OLLAMA", "OLLAMA_CHAT"]:
             if self.api_base is None:
                 self.api_base = "http://localhost:11434"
-                console.print(
-                    f"[yellow][Warning] Using default Ollama API base: {self.api_base}. If inference is not working, you may need to set the API base to the correct URL.[/yellow]"
+                logger.warning(
+                    "Using default Ollama API base: %s. If inference is not working, you may need to set the API base to the correct URL.",
+                    self.api_base,
                 )
         else:
             try:
                 self.api_key = os.environ[f"{provider}_API_KEY"]
             except KeyError as err:
                 raise ValueError(
-                    f"No API key found for {provider}. Please set the API key in the dotenv file."
+                    f"No API key found for {provider}. Please set the {provider}_API_KEY environment variable (e.g., in your .env file)."
                 ) from err
 
         if not litellm.supports_function_calling(model=self.llm_model):
-            console.print(
-                f"[yellow][Warning]: {self.llm_model} does not support function calling. This model may not be able to use tools. Please check the model documentation at https://docs.litellm.ai/docs/providers for more information.[/yellow]"
+            logger.warning(
+                "%s does not support function calling. This model may not be able to use tools. Please check the model documentation at https://docs.litellm.ai/docs/providers for more information.",
+                self.llm_model,
             )
 
-    def get_messages(self, prompt: str | list[str]) -> list[dict]:
+    def _build_messages(self, prompt: str | list[str] | None = None) -> list[dict]:
         """
         Format the prompt messages for the LLM of the form : {"role": ..., "content": ...}
 
         Args:
-            prompt: The prompt to generate a response for
+            prompt: The prompt to generate a response for (str, list of strings, or None)
 
         Returns:
             The messages for the LLM
@@ -97,7 +111,7 @@ class ModuleLLM:
     )
     def generate(
         self,
-        prompt: str | list[str],
+        prompt: str | list[str] | None = None,
         tool_schema: list[dict] | None = None,
         tool_choice: str = "auto",
         response_format: dict | object | None = None,
@@ -106,7 +120,7 @@ class ModuleLLM:
         Generate a response from the LLM using litellm based on the prompt
 
         Args:
-            prompt: The prompt to generate a response for
+            prompt: The prompt to generate a response for (str, list of strings, or None)
             tool_schema: The schema of the tools to use
             tool_choice: The choice of tool to use
             response_format: The format of the response
@@ -115,34 +129,25 @@ class ModuleLLM:
             The response from the LLM
         """
 
-        messages = self.get_messages(prompt)
+        messages = self._build_messages(prompt)
 
-        # If api_base is provided, use it to override the default API base
+        completion_kwargs = {
+            "model": self.llm_model,
+            "messages": messages,
+            "tools": tool_schema,
+            "tool_choice": tool_choice if tool_schema else None,
+            "response_format": response_format,
+        }
         if self.api_base:
-            response = completion(
-                model=self.llm_model,
-                messages=messages,
-                api_base=self.api_base,
-                tools=tool_schema,
-                tool_choice=tool_choice if tool_schema else None,
-                response_format=response_format,
-            )
+            completion_kwargs["api_base"] = self.api_base
 
-        # Otherwise, use the default API base
-        else:
-            response = completion(
-                model=self.llm_model,
-                messages=messages,
-                tools=tool_schema,
-                tool_choice=tool_choice if tool_schema else None,
-                response_format=response_format,
-            )
+        response = completion(**completion_kwargs)
 
         return response
 
     async def agenerate(
         self,
-        prompt: str | list[str],
+        prompt: str | list[str] | None = None,
         tool_schema: list[dict] | None = None,
         tool_choice: str = "auto",
         response_format: dict | object | None = None,
@@ -150,18 +155,22 @@ class ModuleLLM:
         """
         Asynchronous version of generate() method for parallel LLM calls.
         """
-        messages = self.get_messages(prompt)
+        messages = self._build_messages(prompt)
         async for attempt in AsyncRetrying(
             wait=wait_exponential(multiplier=1, min=1, max=60),
             retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
             reraise=True,
         ):
             with attempt:
-                response = await acompletion(
-                    model=self.llm_model,
-                    messages=messages,
-                    tools=tool_schema,
-                    tool_choice=tool_choice if tool_schema else None,
-                    response_format=response_format,
-                )
+                completion_kwargs = {
+                    "model": self.llm_model,
+                    "messages": messages,
+                    "tools": tool_schema,
+                    "tool_choice": tool_choice if tool_schema else None,
+                    "response_format": response_format,
+                }
+                if self.api_base:
+                    completion_kwargs["api_base"] = self.api_base
+
+                response = await acompletion(**completion_kwargs)
         return response

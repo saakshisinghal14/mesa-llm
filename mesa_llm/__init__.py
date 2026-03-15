@@ -21,13 +21,11 @@ __all__ = [
     "enable_automatic_parallel_stepping",
     "record_model",
     "step_agents_parallel",
-    "step_agents_parallel",
-    "step_agents_parallel_sync",
     "step_agents_parallel_sync",
 ]
 
 __title__ = "Mesa-LLM"
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __license__ = "MIT"
 _this_year = datetime.datetime.now(tz=datetime.UTC).date().year
 __copyright__ = f"Copyright {_this_year} Project Mesa Team"

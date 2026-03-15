@@ -12,34 +12,6 @@ import pytest
 from mesa_llm.recording.simulation_recorder import SimulationEvent, SimulationRecorder
 
 
-@pytest.fixture
-def mock_model():
-    """Create a mock Mesa model for testing."""
-    model = Mock()
-    model.__class__.__name__ = "TestModel"
-    model.steps = 0
-    model.agents = []
-    return model
-
-
-@pytest.fixture
-def temp_dir():
-    """Create a temporary directory for test outputs."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
-
-
-@pytest.fixture
-def recorder(mock_model, temp_dir):
-    """Create a SimulationRecorder instance for testing."""
-    return SimulationRecorder(
-        model=mock_model,
-        output_dir=str(temp_dir),
-        record_state_changes=True,
-        auto_save_interval=None,
-    )
-
-
 class TestSimulationEvent:
     """Test the SimulationEvent dataclass."""
 

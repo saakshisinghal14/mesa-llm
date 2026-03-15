@@ -1,3 +1,4 @@
+import copy
 from typing import TYPE_CHECKING
 
 from mesa_llm.reasoning.reasoning import (
@@ -68,7 +69,7 @@ class ReWOOReasoning(Reasoning):
         ---
 
         # Current Observation
-        {self.current_obs}
+        {obs}
 
         ---
 
@@ -102,18 +103,12 @@ class ReWOOReasoning(Reasoning):
         self,
         prompt: str | None = None,
         obs: Observation | None = None,
+        ttl: int = 1,
         selected_tools: list[str] | None = None,
     ) -> Plan:
         """
         Plan the next (ReWOO) action based on the current observation and the agent's memory.
         """
-        # If no prompt is provided, use the agent's default step prompt
-        if prompt is None:
-            if self.agent.step_prompt is not None:
-                prompt = self.agent.step_prompt
-            else:
-                raise ValueError("No prompt provided and agent.step_prompt is None.")
-
         # If we have remaining tool calls, skip observation and plan generation
         if self.remaining_tool_calls > 0:
             index_of_tool = (
@@ -121,11 +116,21 @@ class ReWOOReasoning(Reasoning):
             )
             self.remaining_tool_calls -= 1
             tool_call = [self.current_plan.tool_calls[index_of_tool]]
-            current_plan = self.current_plan
+            current_plan = copy.copy(self.current_plan)
             current_plan.tool_calls = tool_call
-            return Plan(llm_plan=current_plan, step=self.current_obs.step, ttl=1)
+            return Plan(llm_plan=current_plan, step=self.current_obs.step, ttl=ttl)
 
-        self.current_obs = self.agent.generate_obs()
+        # If no prompt is provided, use the agent's default step prompt
+        if prompt is None:
+            if self.agent.step_prompt is not None:
+                prompt = self.agent.step_prompt
+            else:
+                raise ValueError("No prompt provided and agent.step_prompt is None.")
+
+        if obs is None:
+            self.current_obs = self.agent.generate_obs()
+        else:
+            self.current_obs = obs
         llm = self.agent.llm
         system_prompt = self.get_rewoo_system_prompt(self.current_obs)
 
@@ -137,11 +142,13 @@ class ReWOOReasoning(Reasoning):
         )
 
         self.agent.memory.add_to_memory(
-            type="plan", content=rsp.choices[0].message.content
+            type="plan", content={"content": rsp.choices[0].message.content}
         )
 
         rewoo_plan = self.execute_tool_call(
-            rsp.choices[0].message.content, selected_tools
+            rsp.choices[0].message.content,
+            selected_tools=selected_tools,
+            ttl=ttl,
         )
         # Count the number of tool calls in the response and set remaining_tool_calls
         if hasattr(rewoo_plan.llm_plan, "tool_calls"):
@@ -152,11 +159,16 @@ class ReWOOReasoning(Reasoning):
 
         return rewoo_plan
 
-    async def aplan(self, prompt: str, selected_tools: list[str] | None = None) -> Plan:
+    async def aplan(
+        self,
+        prompt: str | None = None,
+        obs: Observation | None = None,
+        ttl: int = 1,
+        selected_tools: list[str] | None = None,
+    ) -> Plan:
         """
         Asynchronous version of plan() method for parallel planning.
         """
-
         # If we have remaining tool calls, skip observation and plan generation
         if self.remaining_tool_calls > 0:
             index_of_tool = (
@@ -164,11 +176,21 @@ class ReWOOReasoning(Reasoning):
             )
             self.remaining_tool_calls -= 1
             tool_call = [self.current_plan.tool_calls[index_of_tool]]
-            current_plan = self.current_plan
+            current_plan = copy.copy(self.current_plan)
             current_plan.tool_calls = tool_call
-            return Plan(llm_plan=current_plan, step=self.current_obs.step, ttl=1)
+            return Plan(llm_plan=current_plan, step=self.current_obs.step, ttl=ttl)
 
-        self.current_obs = self.agent.generate_obs()
+        # If no prompt is provided, use the agent's default step prompt
+        if prompt is None:
+            if self.agent.step_prompt is not None:
+                prompt = self.agent.step_prompt
+            else:
+                raise ValueError("No prompt provided and agent.step_prompt is None.")
+
+        if obs is None:
+            self.current_obs = await self.agent.agenerate_obs()
+        else:
+            self.current_obs = obs
         llm = self.agent.llm
         system_prompt = self.get_rewoo_system_prompt(self.current_obs)
 
@@ -180,11 +202,13 @@ class ReWOOReasoning(Reasoning):
         )
 
         self.agent.memory.add_to_memory(
-            type="plan", content=rsp.choices[0].message.content
+            type="plan", content={"content": rsp.choices[0].message.content}
         )
 
         rewoo_plan = await self.aexecute_tool_call(
-            rsp.choices[0].message.content, selected_tools
+            rsp.choices[0].message.content,
+            selected_tools=selected_tools,
+            ttl=ttl,
         )
         # Count the number of tool calls in the response and set remaining_tool_calls
         if hasattr(rewoo_plan.llm_plan, "tool_calls"):

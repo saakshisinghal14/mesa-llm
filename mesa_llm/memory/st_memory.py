@@ -13,7 +13,7 @@ class ShortTermMemory(Memory):
 
     Attributes:
         agent : the agent that the memory belongs to
-        n : number of short-term memories to remember
+        n : positive number of short-term memories to remember
         display : whether to display the memory
         llm_model : the model to use for the summarization
     """
@@ -24,12 +24,16 @@ class ShortTermMemory(Memory):
         n: int = 5,
         display: bool = True,
     ):
+        if n < 1:
+            raise ValueError("n must be >= 1 for ShortTermMemory")
+
         super().__init__(
             agent=agent,
             display=display,
         )
         self.n = n
-        self.short_term_memory = deque()
+        self.short_term_memory = deque(maxlen=self.n)
+        self._current_step_entry: MemoryEntry | None = None
 
     async def aprocess_step(self, pre_step: bool = False):
         """
@@ -40,35 +44,36 @@ class ShortTermMemory(Memory):
     def process_step(self, pre_step: bool = False):
         """
         Process the step of the agent :
-        - Add the new entry to the short term memory
+        - Capture pre-step content into the current in-progress step entry
+        - Merge current and post-step content into one finalized entry
         - Display the new entry
         """
 
-        # Add the new entry to the short term memory
+        # Save a temporary pre-step snapshot. This entry is not persisted in deque.
         if pre_step:
-            new_entry = MemoryEntry(
+            self._current_step_entry = MemoryEntry(
                 agent=self.agent,
                 content=self.step_content,
                 step=None,
             )
-            self.short_term_memory.append(new_entry)
             self.step_content = {}
             return
 
-        elif not self.short_term_memory[-1].content.get("step", None):
-            pre_step = self.short_term_memory.pop()
-            self.step_content.update(pre_step.content)
+        new_entry = None
+        if self._current_step_entry is not None:
+            merged_content = dict(self.step_content)
+            merged_content.update(self._current_step_entry.content)
             new_entry = MemoryEntry(
                 agent=self.agent,
-                content=self.step_content,
+                content=merged_content,
                 step=self.agent.model.steps,
             )
-
             self.short_term_memory.append(new_entry)
+            self._current_step_entry = None
             self.step_content = {}
 
         # Display the new entry
-        if self.display:
+        if self.display and new_entry is not None:
             new_entry.display()
 
     def format_short_term(self) -> str:
