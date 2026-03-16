@@ -276,6 +276,7 @@ class LLMAgent(Agent):
                 },
             )
         return f"{self.unique_id} → {recipient_ids} : {message}"
+
     def send_message(self, message: str, recipients: list[Agent]) -> str:
         """
         Send a message to the recipients.
