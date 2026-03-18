@@ -51,7 +51,9 @@ class LLMAgent(Agent):
 
         self.model = model
         self.step_prompt = step_prompt
-        self.llm = ModuleLLM(llm_model=llm_model, system_prompt=system_prompt, api_base=api_base)
+        self.llm = ModuleLLM(
+            llm_model=llm_model, system_prompt=system_prompt, api_base=api_base
+        )
 
         self.memory = STLTMemory(
             agent=self,

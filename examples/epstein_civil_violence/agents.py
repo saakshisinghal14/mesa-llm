@@ -16,6 +16,7 @@ class CitizenState(Enum):
     ACTIVE = 2
     ARRESTED = 3
 
+
 class Citizen(LLMAgent, mesa.discrete_space.CellAgent):
     """
     A member of the general population, may or may not be in active rebellion.
