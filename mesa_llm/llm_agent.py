@@ -167,12 +167,15 @@ class LLMAgent(Agent):
             space = getattr(self.model, "space", None)
 
             if grid and isinstance(grid, SingleGrid | MultiGrid):
-                neighbors = grid.get_neighbors(
-                    tuple(self.pos),
-                    moore=True,
-                    include_center=False,
-                    radius=self.vision,
-                )
+                if self.pos is None:
+                    neighbors = []
+                else:
+                    neighbors = grid.get_neighbors(
+                        tuple(self.pos),
+                        moore=True,
+                        include_center=False,
+                        radius=self.vision,
+                    )
             elif grid and isinstance(
                 grid, OrthogonalMooreGrid | OrthogonalVonNeumannGrid
             ):
@@ -187,10 +190,13 @@ class LLMAgent(Agent):
                     neighbors = []
 
             elif space and isinstance(space, ContinuousSpace):
-                all_nearby = space.get_neighbors(
-                    self.pos, radius=self.vision, include_center=True
-                )
-                neighbors = [a for a in all_nearby if a is not self]
+                if self.pos is None:
+                    neighbors = []
+                else:
+                    all_nearby = space.get_neighbors(
+                        self.pos, radius=self.vision, include_center=True
+                    )
+                    neighbors = [a for a in all_nearby if a is not self]
 
             else:
                 # No recognized grid/space type
