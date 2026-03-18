@@ -42,6 +42,7 @@ class LLMAgent(Agent):
         reasoning: type[Reasoning],
         llm_model: str = "gemini/gemini-2.0-flash",
         system_prompt: str | None = None,
+        api_base: str | None = None,
         vision: float | None = None,
         internal_state: list[str] | str | None = None,
         step_prompt: str | None = None,
@@ -50,13 +51,14 @@ class LLMAgent(Agent):
 
         self.model = model
         self.step_prompt = step_prompt
-        self.llm = ModuleLLM(llm_model=llm_model, system_prompt=system_prompt)
+        self.llm = ModuleLLM(llm_model=llm_model, system_prompt=system_prompt, api_base=api_base)
 
         self.memory = STLTMemory(
             agent=self,
             short_term_capacity=5,
             consolidation_capacity=2,
             llm_model=llm_model,
+            api_base=api_base,
         )
 
         self.tool_manager = ToolManager()

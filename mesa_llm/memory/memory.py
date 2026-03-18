@@ -110,6 +110,7 @@ class Memory(ABC):
         self,
         agent: "LLMAgent",
         llm_model: str | None = None,
+        api_base: str | None = None,
         display: bool = True,
     ):
         """
@@ -117,11 +118,12 @@ class Memory(ABC):
 
         Args:
             llm_model : the model to use for the summarization
+            api_base : the API base URL to use for the LLM provider
             agent : the agent that the memory belongs to
         """
         self.agent = agent
         if llm_model:
-            self.llm = ModuleLLM(llm_model=llm_model)
+            self.llm = ModuleLLM(llm_model=llm_model, api_base=api_base)
 
         self.display = display
 

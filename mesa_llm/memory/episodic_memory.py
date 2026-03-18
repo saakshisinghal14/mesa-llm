@@ -64,6 +64,7 @@ class EpisodicMemory(Memory):
         self,
         agent: "LLMAgent",
         llm_model: str | None = None,
+        api_base: str | None = None,
         display: bool = True,
         max_capacity: int = 200,
         considered_entries: int = 30,
@@ -77,7 +78,7 @@ class EpisodicMemory(Memory):
                 "llm_model must be provided for the usage of episodic memory"
             )
 
-        super().__init__(agent, llm_model=llm_model, display=display)
+        super().__init__(agent, llm_model=llm_model, api_base=api_base, display=display)
 
         self.max_capacity = max_capacity
         self.memory_entries = deque(maxlen=self.max_capacity)

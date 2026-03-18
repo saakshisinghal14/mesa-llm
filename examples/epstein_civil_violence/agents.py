@@ -16,7 +16,6 @@ class CitizenState(Enum):
     ACTIVE = 2
     ARRESTED = 3
 
-
 class Citizen(LLMAgent, mesa.discrete_space.CellAgent):
     """
     A member of the general population, may or may not be in active rebellion.
@@ -52,6 +51,7 @@ class Citizen(LLMAgent, mesa.discrete_space.CellAgent):
         arrest_prob_constant=0.5,
         regime_legitimacy=0.5,
         threshold=0.5,
+        api_base=None,
     ):
         # Call the superclass constructor with updated internal state
         super().__init__(
@@ -62,6 +62,7 @@ class Citizen(LLMAgent, mesa.discrete_space.CellAgent):
             vision=vision,
             internal_state=internal_state,
             step_prompt=step_prompt,
+            api_base=api_base,
         )
 
         self.hardship = self.random.random()
@@ -77,7 +78,8 @@ class Citizen(LLMAgent, mesa.discrete_space.CellAgent):
         self.memory = STLTMemory(
             agent=self,
             display=True,
-            llm_model="openai/gpt-4o-mini",
+            llm_model=llm_model,
+            api_base=api_base,
         )
 
         self.threshold = threshold
@@ -176,6 +178,7 @@ class Cop(LLMAgent, mesa.discrete_space.CellAgent):
         internal_state,
         step_prompt,
         max_jail_term=2,
+        api_base=None,
     ):
         """
         Create a new Cop.
@@ -193,6 +196,7 @@ class Cop(LLMAgent, mesa.discrete_space.CellAgent):
             vision=vision,
             internal_state=internal_state,
             step_prompt=step_prompt,
+            api_base=api_base,
         )
         self.max_jail_term = max_jail_term
         self.tool_manager = cop_tool_manager
@@ -201,7 +205,8 @@ class Cop(LLMAgent, mesa.discrete_space.CellAgent):
         self.memory = STLTMemory(
             agent=self,
             display=True,
-            llm_model="openai/gpt-4o-mini",
+            llm_model=llm_model,
+            api_base=api_base,
         )
 
     def step(self):
