@@ -240,26 +240,24 @@ class SimulationRecorder:
             }
         )
 
-        # Record final model state
-        if any(e.event_type == "simulation_end" for e in self.events):
-            return filepath
-
-        self.record_model_event(
-            event_type="simulation_end",
-            content={
-                "status": (
-                    "unknown"
-                    if getattr(self.model, "max_steps", None) is None
-                    else (
-                        "interrupted"
-                        if self.model.steps < self.model.max_steps
-                        else "completed"
-                    )
-                ),
-                "final_step": self.model.steps,
-                "total_events": len(self.events),
-            },
-        )
+        # Record final model state (only once)
+        if not any(e.event_type == "simulation_end" for e in self.events):
+            self.record_model_event(
+                event_type="simulation_end",
+                content={
+                    "status": (
+                        "unknown"
+                        if getattr(self.model, "max_steps", None) is None
+                        else (
+                            "interrupted"
+                            if self.model.steps < self.model.max_steps
+                            else "completed"
+                        )
+                    ),
+                    "final_step": self.model.steps,
+                    "total_events": len(self.events),
+                },
+            )
 
         # Prepare export data
         export_data = {

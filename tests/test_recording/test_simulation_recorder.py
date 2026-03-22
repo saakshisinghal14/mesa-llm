@@ -297,6 +297,23 @@ class TestSimulationRecorder:
         with pytest.raises(ValueError, match="Format must be 'json' or 'pickle'"):
             recorder.save(format="xml")
 
+    def test_save_twice_produces_single_simulation_end(self, recorder, temp_dir):
+        """Calling save() twice must not duplicate simulation_end and must write the file both times."""
+        recorder.model.max_steps = 10
+        recorder.record_event("test_event", {"data": "test"})
+
+        filepath1 = recorder.save(filename="test_double_save.json", format="json")
+        filepath2 = recorder.save(filename="test_double_save.json", format="json")
+
+        assert filepath1 == filepath2
+        assert filepath2.exists()
+
+        with open(filepath2) as f:
+            data = json.load(f)
+
+        simulation_end_events = [e for e in data["events"] if e["event_type"] == "simulation_end"]
+        assert len(simulation_end_events) == 1
+
     def test_get_stats(self, recorder, mock_model):
         """Test getting recording statistics."""
         # Add some test events
