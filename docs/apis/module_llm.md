@@ -36,15 +36,15 @@ from mesa_llm.module_llm import ModuleLLM
 # Connect to a remote Ollama instance
 llm = ModuleLLM(
    llm_model="ollama_chat/llama3.2",
+   system_prompt="You are a helpful agent.",
    api_base="http://192.168.1.100:11434",
-   system_prompt="You are a helpful agent."
 )
 
 # Connect to a local LM Studio server
 llm = ModuleLLM(
    llm_model="openai/my-local-model",
+   system_prompt="You are a helpful agent.",
    api_base="http://localhost:1234/v1",
-   system_prompt="You are a helpful agent."
 )
 ```
 

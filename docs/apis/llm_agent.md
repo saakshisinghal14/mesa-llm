@@ -15,10 +15,10 @@ class MyAgent(LLMAgent):
             reasoning=CoTReasoning,
             llm_model="openai/gpt-4o",
             system_prompt="You are a helpful agent in a simulation.",
-            api_base=None,  # Set to a custom URL for self-hosted LLMs (e.g., "http://192.168.1.100:11434")
             vision=2,  # See 2 cells in each direction
             internal_state=["curious", "cooperative"],
-            step_prompt="Decide what to do next based on your observations."
+            step_prompt="Decide what to do next based on your observations.",
+            api_base=None,  # Set to a custom URL for self-hosted LLMs (e.g., "http://192.168.1.100:11434")
       )
 
       # You can override default memory with EpisodicMemory (default is STLTMemory)

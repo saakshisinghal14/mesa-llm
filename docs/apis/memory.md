@@ -18,8 +18,8 @@ class MyAgent(LLMAgent):
             short_term_capacity=10,    # Store 10 recent experiences
             consolidation_capacity=3, # Consolidate when 13 total entries
             llm_model="openai/gpt-4o-mini",
+            display=True,             # Display the memory entries in the console when they are added to the memory
             api_base=None,            # Set to a custom URL for self-hosted LLMs
-            display=True              # Display the memory entries in the console when they are added to the memory
       )
 ```
 

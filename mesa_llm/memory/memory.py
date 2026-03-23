@@ -110,16 +110,17 @@ class Memory(ABC):
         self,
         agent: "LLMAgent",
         llm_model: str | None = None,
-        api_base: str | None = None,
         display: bool = True,
+        api_base: str | None = None,
     ):
         """
         Initialize the memory
 
         Args:
-            llm_model : the model to use for the summarization
-            api_base : the API base URL to use for the LLM provider
             agent : the agent that the memory belongs to
+            llm_model : the model to use for summarization
+            display : whether to display memory entries in the console
+            api_base : the API base URL to use for the LLM provider
         """
         self.agent = agent
         if llm_model:
