@@ -61,7 +61,14 @@ class MemoryEntry:
                 continue
 
             lines.append(f"\n[bold cyan][{key.title()}][/bold cyan]")
-            if isinstance(value, dict):
+            if isinstance(value, list):
+                for i, item in enumerate(value, 1):
+                    lines.append(f"   [blue]({i})[/blue]")
+                    if isinstance(item, dict):
+                        lines.extend(format_nested_dict(item, 2))
+                    else:
+                        lines.append(f"      [blue]└──[/blue] [cyan]{item} :[/cyan]")
+            elif isinstance(value, dict):
                 lines.extend(format_nested_dict(value, 1))
             elif isinstance(value, list):
                 for i, item in enumerate(value):
@@ -156,9 +163,20 @@ class Memory(ABC):
     async def aprocess_step(self, pre_step: bool = False):
         return self.process_step(pre_step)
 
+    # Event types that represent discrete, additive occurrences within a step.
+    # Multiple entries of the same type are collected into a list rather than
+    # overwriting each other (e.g. several messages received in one step).
+    ADDITIVE_EVENT_TYPES: set[str] = frozenset({"message", "action"})
+
     def add_to_memory(self, type: str, content: dict):
         """
-        Add a new entry to the memory
+        Add a new entry to the memory.
+
+        For *observation* types the latest value replaces the previous one
+        (state-based).  For additive event types (messages, actions, …)
+        multiple entries within the same step are collected in a list so
+        that no data is silently lost.  All other types use simple
+        overwrite semantics (plans, reasoning steps, etc.).
         """
         if not isinstance(content, dict):
             raise TypeError(
@@ -174,6 +192,16 @@ class Memory(ABC):
             if changed_parts:
                 self.step_content[type] = changed_parts
             self.last_observation = content
+        elif type in self.ADDITIVE_EVENT_TYPES:
+            # Accumulate discrete events so concurrent entries are preserved
+            existing = self.step_content.get(type)
+            if existing is None:
+                self.step_content[type] = [content]
+            elif isinstance(existing, list):
+                existing.append(content)
+            else:
+                # Migrate a legacy single-dict entry into a list
+                self.step_content[type] = [existing, content]
         else:
             self.step_content[type] = content
 
