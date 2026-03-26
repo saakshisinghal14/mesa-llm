@@ -67,18 +67,11 @@ class MemoryEntry:
                     if isinstance(item, dict):
                         lines.extend(format_nested_dict(item, 2))
                     else:
-                        lines.append(f"      [blue]└──[/blue] [cyan]{item} :[/cyan]")
+                        lines.append(f"      [blue]└──[/blue] [cyan]{item}[/cyan]")
             elif isinstance(value, dict):
                 lines.extend(format_nested_dict(value, 1))
-            elif isinstance(value, list):
-                for i, item in enumerate(value):
-                    if isinstance(item, dict):
-                        lines.append(f"   [blue]├──[/blue] [cyan]({i + 1})[/cyan]")
-                        lines.extend(format_nested_dict(item, 2))
-                    else:
-                        lines.append(f"   [blue]├──[/blue] [cyan]{item}[/cyan]")
             else:
-                lines.append(f"   [blue]└──[/blue] [cyan]{value} :[/cyan]")
+                lines.append(f"   [blue]└──[/blue] [cyan]{value}[/cyan]")
 
         content = "\n".join(lines)
 
@@ -166,7 +159,7 @@ class Memory(ABC):
     # Event types that represent discrete, additive occurrences within a step.
     # Multiple entries of the same type are collected into a list rather than
     # overwriting each other (e.g. several messages received in one step).
-    ADDITIVE_EVENT_TYPES: set[str] = frozenset({"message", "action"})
+    ADDITIVE_EVENT_TYPES: frozenset[str] = frozenset({"message", "action"})
 
     def add_to_memory(self, type: str, content: dict):
         """

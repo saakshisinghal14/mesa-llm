@@ -257,13 +257,17 @@ class EpisodicMemory(Memory):
         """
         Get the communication history
         """
-        return "\n".join(
-            [
-                f"step {entry.step}: {entry.content['message']}\n\n"
-                for entry in self.memory_entries
-                if "message" in entry.content
-            ]
-        )
+        lines = []
+        for entry in self.memory_entries:
+            if "message" not in entry.content:
+                continue
+            msgs = entry.content["message"]
+            if isinstance(msgs, list):
+                for msg in msgs:
+                    lines.append(f"step {entry.step}: {msg}\n\n")
+            else:
+                lines.append(f"step {entry.step}: {msgs}\n\n")
+        return "\n".join(lines)
 
     async def aprocess_step(self, pre_step: bool = False):
         """

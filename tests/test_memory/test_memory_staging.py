@@ -83,6 +83,19 @@ class TestAdditiveMemory:
         assert isinstance(obs, dict)
         assert obs == {"pos": (1, 1)}
 
+    def test_observation_unchanged_skips_update(self, agent):
+        """Identical observation should not update step_content."""
+        mem = ConcreteMemory(agent=agent)
+        mem.add_to_memory("observation", {"pos": (0, 0)})
+        assert "observation" in mem.step_content
+
+        # Clear step_content to simulate a fresh step
+        mem.step_content = {}
+
+        # Same observation again -- changed_parts is empty
+        mem.add_to_memory("observation", {"pos": (0, 0)})
+        assert "observation" not in mem.step_content
+
     def test_non_additive_types_overwrite(self, agent):
         """Types not in ADDITIVE_EVENT_TYPES should still overwrite."""
         mem = ConcreteMemory(agent=agent)
@@ -254,6 +267,81 @@ class TestSTLTCommunicationHistory:
 
 
 # ===================================================================
+# Tests for EpisodicMemory.get_communication_history with lists
+# ===================================================================
+class TestEpisodicCommunicationHistory:
+    """Ensure EpisodicMemory communication history handles list-valued messages."""
+
+    def test_episodic_communication_history_with_list_messages(self, agent):
+        """Cover the list branch in EpisodicMemory.get_communication_history."""
+        from mesa_llm.memory.episodic_memory import EpisodicMemory
+
+        mem = EpisodicMemory(
+            agent=agent, llm_model="gemini/gemini-2.0-flash", display=False
+        )
+        entry = MemoryEntry(
+            agent=agent,
+            content={
+                "message": [
+                    {"sender": "A1", "msg": "Attack!"},
+                    {"sender": "A2", "msg": "Defend!"},
+                ]
+            },
+            step=1,
+        )
+        mem.memory_entries.append(entry)
+        history = mem.get_communication_history()
+        assert "Attack!" in history
+        assert "Defend!" in history
+
+    def test_episodic_communication_history_with_scalar_message(self, agent):
+        """Cover the non-list (scalar) branch in EpisodicMemory.get_communication_history."""
+        from mesa_llm.memory.episodic_memory import EpisodicMemory
+
+        mem = EpisodicMemory(
+            agent=agent, llm_model="gemini/gemini-2.0-flash", display=False
+        )
+        entry = MemoryEntry(
+            agent=agent,
+            content={"message": {"sender": "A1", "msg": "solo"}},
+            step=1,
+        )
+        mem.memory_entries.append(entry)
+        history = mem.get_communication_history()
+        assert "solo" in history
+
+    def test_episodic_communication_history_skips_non_message_entries(self, agent):
+        """Entries without a 'message' key must be skipped."""
+        from mesa_llm.memory.episodic_memory import EpisodicMemory
+
+        mem = EpisodicMemory(
+            agent=agent, llm_model="gemini/gemini-2.0-flash", display=False
+        )
+        mem.memory_entries.append(
+            MemoryEntry(agent=agent, content={"observation": {"pos": (1, 1)}}, step=1)
+        )
+        mem.memory_entries.append(
+            MemoryEntry(
+                agent=agent,
+                content={"message": {"sender": "A1", "msg": "hi"}},
+                step=2,
+            )
+        )
+        history = mem.get_communication_history()
+        assert "hi" in history
+        assert "observation" not in history
+
+    def test_episodic_communication_history_empty(self, agent):
+        """Empty memory should return empty string."""
+        from mesa_llm.memory.episodic_memory import EpisodicMemory
+
+        mem = EpisodicMemory(
+            agent=agent, llm_model="gemini/gemini-2.0-flash", display=False
+        )
+        assert mem.get_communication_history() == ""
+
+
+# ===================================================================
 # Tests for MemoryEntry.__str__ edge cases
 # ===================================================================
 class TestMemoryEntryEdgeCases:
@@ -266,6 +354,13 @@ class TestMemoryEntryEdgeCases:
         result = str(entry)
         assert "moved north" in result
         assert "picked up item" in result
+
+    def test_str_with_scalar_value(self, agent):
+        """Cover the else branch where value is neither list nor dict."""
+        content = {"status": "idle"}
+        entry = MemoryEntry(content=content, step=1, agent=agent)
+        result = str(entry)
+        assert "idle" in result
 
 
 # ===================================================================
