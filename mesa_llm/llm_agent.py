@@ -76,7 +76,6 @@ class LLMAgent(Agent):
         self.vision = vision
         self.reasoning = reasoning(agent=self)
         self.system_prompt = system_prompt
-        self.is_speaking = False
         self._current_plan = None  # Store current plan for formatting
 
         # display coordination
