@@ -127,10 +127,7 @@ class ToolManager:
             expects_agent = "agent" in sig.parameters
 
             # Filter arguments to only those accepted by the function, with type coercion based on annotations
-            try:
-                hints = function_to_call.__annotations__
-            except AttributeError:
-                hints = {}
+            hints = getattr(function_to_call, "__annotations__", {})
 
             coerce: dict[type, type] = {float: float, int: int}
             filtered_args = {}
