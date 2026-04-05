@@ -974,9 +974,7 @@ def test_include_default_tools_false_removes_inbuilt(monkeypatch):
     """When include_default_tools=False, inbuilt tools are removed."""
     monkeypatch.setenv("GEMINI_API_KEY", "dummy")
     model = Model(rng=42)
-    agent = LLMAgent(
-        model=model, reasoning=ReActReasoning, include_default_tools=False
-    )
+    agent = LLMAgent(model=model, reasoning=ReActReasoning, include_default_tools=False)
 
     for name in INBUILT_TOOL_NAMES:
         assert not agent.tool_manager.has_tool(name), f"{name} should NOT be registered"
