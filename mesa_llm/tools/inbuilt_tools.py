@@ -18,6 +18,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+INBUILT_TOOL_NAMES: frozenset[str] = frozenset(
+    {"move_one_step", "teleport_to_location", "speak_to"}
+)
+
 # Mapping directions to (dx, dy) for Cartesian-style spaces.
 direction_map_xy = {
     "North": (0, 1),

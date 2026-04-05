@@ -17,6 +17,7 @@ from mesa_llm.reasoning.reasoning import (
     Observation,
     Reasoning,
 )
+from mesa_llm.tools.inbuilt_tools import INBUILT_TOOL_NAMES
 from mesa_llm.tools.tool_manager import ToolManager
 
 
@@ -38,6 +39,10 @@ class LLMAgent(Agent):
             the agent each step.
         api_base (str | None): Optional custom LiteLLM-compatible base URL for
             self-hosted or remote inference endpoints.
+        include_default_tools (bool): Whether to include the built-in tools
+            (``move_one_step``, ``teleport_to_location``, ``speak_to``) in
+            this agent's tool manager. Set to ``False`` when the agent should
+            only have access to domain-specific tools. Defaults to ``True``.
 
     Attributes:
         llm (ModuleLLM): The internal LLM interface used by the agent.
@@ -55,6 +60,7 @@ class LLMAgent(Agent):
         internal_state: list[str] | str | None = None,
         step_prompt: str | None = None,
         api_base: str | None = None,
+        include_default_tools: bool = True,
     ):
         super().__init__(model=model)
 
@@ -73,6 +79,9 @@ class LLMAgent(Agent):
         )
 
         self.tool_manager = ToolManager()
+        if not include_default_tools:
+            for name in INBUILT_TOOL_NAMES:
+                self.tool_manager.tools.pop(name, None)
         self.vision = vision
         self.reasoning = reasoning(agent=self)
         self.system_prompt = system_prompt

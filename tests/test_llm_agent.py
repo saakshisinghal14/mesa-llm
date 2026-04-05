@@ -13,6 +13,7 @@ from mesa_llm import Plan
 from mesa_llm.llm_agent import LLMAgent
 from mesa_llm.memory.st_memory import ShortTermMemory
 from mesa_llm.reasoning.react import ReActReasoning
+from mesa_llm.tools.inbuilt_tools import INBUILT_TOOL_NAMES
 
 
 def test_apply_plan_adds_to_memory(monkeypatch):
@@ -957,3 +958,55 @@ async def test_asend_message_stores_serializable_ids(monkeypatch):
     assert data["sender"] == 10
     assert data["message"] == "hello"
     assert "recipients" not in data
+
+
+def test_include_default_tools_true_by_default(monkeypatch):
+    """Default behavior: inbuilt tools are present in the tool manager."""
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy")
+    model = Model(rng=42)
+    agent = LLMAgent(model=model, reasoning=ReActReasoning)
+
+    for name in INBUILT_TOOL_NAMES:
+        assert agent.tool_manager.has_tool(name), f"{name} should be registered"
+
+
+def test_include_default_tools_false_removes_inbuilt(monkeypatch):
+    """When include_default_tools=False, inbuilt tools are removed."""
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy")
+    model = Model(rng=42)
+    agent = LLMAgent(
+        model=model, reasoning=ReActReasoning, include_default_tools=False
+    )
+
+    for name in INBUILT_TOOL_NAMES:
+        assert not agent.tool_manager.has_tool(name), f"{name} should NOT be registered"
+
+
+def test_include_default_tools_false_keeps_user_tools(monkeypatch):
+    """User-defined global tools survive when include_default_tools=False."""
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy")
+    from mesa_llm.tools.tool_decorator import _GLOBAL_TOOL_REGISTRY, tool
+
+    @tool
+    def custom_domain_tool(agent, value: int) -> str:
+        """A user-defined domain tool.
+
+        Args:
+            value: The input value.
+
+        Returns:
+            Confirmation string.
+        """
+        return f"done {value}"
+
+    try:
+        model = Model(rng=42)
+        agent = LLMAgent(
+            model=model, reasoning=ReActReasoning, include_default_tools=False
+        )
+
+        assert agent.tool_manager.has_tool("custom_domain_tool")
+        for name in INBUILT_TOOL_NAMES:
+            assert not agent.tool_manager.has_tool(name)
+    finally:
+        _GLOBAL_TOOL_REGISTRY.pop("custom_domain_tool", None)
