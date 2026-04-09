@@ -11,6 +11,22 @@ if TYPE_CHECKING:
     from mesa_llm.llm_agent import LLMAgent
 
 
+def _format_message_entry(msg_value) -> str:
+    """Render a message memory value as a readable string.
+
+    Handles the nested dict produced by the speak_to tool:
+        {"message": "<text>", "sender": <id>, "recipients": [...]}
+    as well as plain strings stored by legacy or test code.
+    """
+    if isinstance(msg_value, dict):
+        text = msg_value.get("message", str(msg_value))
+        sender = msg_value.get("sender")
+        if sender is not None:
+            return f"Agent {sender} says: {text}"
+        return str(text)
+    return str(msg_value)
+
+
 @dataclass
 class MemoryEntry:
     """

@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from mesa_llm.memory.memory import Memory, MemoryEntry
+from mesa_llm.memory.memory import Memory, MemoryEntry, _format_message_entry
 from mesa_llm.module_llm import ModuleLLM
 
 if TYPE_CHECKING:
@@ -167,3 +167,31 @@ class TestMemoryParent:
             str(exc_info.value)
             == "Expected 'content' to be dict, got str: 'raw async string plan'"
         )
+
+
+class TestFormatMessageEntry:
+    """Unit tests for the _format_message_entry helper."""
+
+    def test_plain_string_passthrough(self):
+        """Legacy/test entries that store message as a plain string are returned as-is."""
+        assert _format_message_entry("Hello") == "Hello"
+
+    def test_nested_dict_with_sender(self):
+        """Real speak_to payload: dict with 'message' text and 'sender' id."""
+        msg = {"message": "hello world", "sender": 42, "recipients": [7]}
+        assert _format_message_entry(msg) == "Agent 42 says: hello world"
+
+    def test_nested_dict_without_sender(self):
+        """Dict with message text but no sender — render text only."""
+        msg = {"message": "standalone note"}
+        assert _format_message_entry(msg) == "standalone note"
+
+    def test_nested_dict_without_message_key_falls_back_to_str(self):
+        """Dict lacking 'message' key falls back to str() of the whole dict."""
+        msg = {"foo": "bar"}
+        assert _format_message_entry(msg) == str(msg)
+
+    def test_episodic_payload_with_importance(self):
+        """EpisodicMemory adds 'importance' to the content dict — should still format cleanly."""
+        msg = {"message": "critical update", "sender": 5, "importance": 4}
+        assert _format_message_entry(msg) == "Agent 5 says: critical update"
