@@ -12,7 +12,7 @@ authors = [
 ]
 readme = "README.md"
 dependencies = [
-    "mesa[rec]>=3.0",
+    "mesa[rec]>=3.0,<4",
     "litellm",
     "python-dotenv",
     "terminal-style",
