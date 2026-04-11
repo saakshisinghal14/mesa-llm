@@ -77,6 +77,17 @@ class ToolManager:
         A non-empty list returns only the named tools in the given order.
         """
         if selected_tools is not None:
+            invalid_tools = [tool for tool in selected_tools if tool not in self.tools]
+            if invalid_tools:
+                available_tools = sorted(self.tools.keys())
+                raise ValueError(
+                    style(
+                        "Unknown tool name(s): "
+                        f"{invalid_tools}. Available tools: {available_tools}",
+                        color="red",
+                    )
+                )
+
             return [self.tools[tool].__tool_schema__ for tool in selected_tools]
 
         return [fn.__tool_schema__ for fn in self.tools.values()]

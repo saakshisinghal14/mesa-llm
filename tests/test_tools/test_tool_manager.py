@@ -287,7 +287,7 @@ class TestToolManager:
         # Test with nonexistent tools
         selected_tools = ["existing_tool", "nonexistent_tool"]
 
-        with pytest.raises(KeyError):
+        with pytest.raises(ValueError, match="Unknown tool name"):
             manager.get_all_tools_schema(selected_tools)
 
     def test_get_all_tools_schema_single_tool(self):
