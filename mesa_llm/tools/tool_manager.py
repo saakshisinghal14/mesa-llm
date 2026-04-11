@@ -69,6 +69,13 @@ class ToolManager:
     def get_all_tools_schema(
         self, selected_tools: list[str] | None = None
     ) -> list[dict]:
+        """Return schemas for all tools or an explicit selection.
+
+        Omitting ``selected_tools`` or passing ``None`` uses the default
+        behavior of returning all registered tools.
+        ``selected_tools=[]`` returns no tools.
+        A non-empty list returns only the named tools in the given order.
+        """
         if selected_tools is not None:
             return [self.tools[tool].__tool_schema__ for tool in selected_tools]
 
