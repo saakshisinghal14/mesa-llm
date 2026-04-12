@@ -74,14 +74,14 @@ class TestCoTReasoning:
         # Patch llm.generate
         monkeypatch.setattr(agent.llm, "generate", fake_generate)
 
-        # Create an observation (step 0 -> plan.step should be 1)
+        # Create an observation. Plan.step reflects the current model step.
         obs = Observation(step=0, self_state={}, local_state={})
 
         plan = agent.reasoning.plan(obs=obs)
 
         # Assertions
         assert isinstance(plan, Plan)
-        assert plan.step == 1
+        assert plan.step == 0
         assert plan.llm_plan.content == "mock execution"
         assert plan.ttl == 1
         # and our memory.add_to_memory should at least have been called once with type="observation"
@@ -214,7 +214,7 @@ class TestCoTReasoning:
         result = asyncio.run(reasoning.aplan(prompt="Async prompt", obs=obs, ttl=4))
 
         assert isinstance(result, Plan)
-        assert result.step == 2
+        assert result.step == 1
         assert result.ttl == 4
         assert mock_agent.llm.agenerate.call_count == 2
         assert mock_agent.llm.agenerate.call_args_list[1].kwargs["tool_choice"] == (

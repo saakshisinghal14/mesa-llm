@@ -120,7 +120,6 @@ class CoTReasoning(Reasoning):
         if obs is None:
             obs = self.agent.generate_obs()
 
-        step = obs.step + 1
         llm = self.agent.llm
         obs_str = str(obs)
 
@@ -145,18 +144,12 @@ class CoTReasoning(Reasoning):
         # Pass plan content to agent for display
         if hasattr(self.agent, "_step_display_data"):
             self.agent._step_display_data["plan_content"] = chaining_message
-        system_prompt = (
-            "You are an executor that executes the plan given to you in the prompt through tool calls. "
-            "If the plan concludes that no action should be taken, do not call any tool."
+        cot_plan = self.execute_tool_call(
+            chaining_message,
+            selected_tools=selected_tools,
+            ttl=ttl,
+            tool_calls=tool_calls,
         )
-        llm.system_prompt = system_prompt
-        rsp = llm.generate(
-            prompt=chaining_message,
-            tool_schema=self.agent.tool_manager.get_all_tools_schema(selected_tools),
-            tool_choice=tool_calls,
-        )
-        response_message = rsp.choices[0].message
-        cot_plan = Plan(step=step, llm_plan=response_message, ttl=ttl)
 
         self.agent.memory.add_to_memory(
             type="Plan-Execution", content={"content": str(cot_plan)}
@@ -198,7 +191,6 @@ class CoTReasoning(Reasoning):
         if obs is None:
             obs = await self.agent.agenerate_obs()
 
-        step = obs.step + 1
         llm = self.agent.llm
 
         obs_str = str(obs)
@@ -222,18 +214,12 @@ class CoTReasoning(Reasoning):
         # Pass plan content to agent for display
         if hasattr(self.agent, "_step_display_data"):
             self.agent._step_display_data["plan_content"] = chaining_message
-        system_prompt = (
-            "You are an executor that executes the plan given to you in the prompt through tool calls. "
-            "If the plan concludes that no action should be taken, do not call any tool."
+        cot_plan = await self.aexecute_tool_call(
+            chaining_message,
+            selected_tools=selected_tools,
+            ttl=ttl,
+            tool_calls=tool_calls,
         )
-        llm.system_prompt = system_prompt
-        rsp = await llm.agenerate(
-            prompt=chaining_message,
-            tool_schema=self.agent.tool_manager.get_all_tools_schema(selected_tools),
-            tool_choice=tool_calls,
-        )
-        response_message = rsp.choices[0].message
-        cot_plan = Plan(step=step, llm_plan=response_message, ttl=ttl)
 
         await self.agent.memory.aadd_to_memory(
             type="Plan-Execution", content={"content": str(cot_plan)}
