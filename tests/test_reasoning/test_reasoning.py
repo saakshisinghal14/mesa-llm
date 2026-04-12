@@ -58,7 +58,14 @@ class TestReasoningBase:
 
         # 2. Instantiate a concrete implementation of Reasoning to test the base method
         class ConcreteReasoning(Reasoning):
-            def plan(self, prompt=None, obs=None, ttl=1, selected_tools=None):
+            def plan(
+                self,
+                prompt=None,
+                obs=None,
+                ttl=1,
+                selected_tools=None,
+                tool_calls="auto",
+            ):
                 pass  # Not needed for this test
 
         reasoning = ConcreteReasoning(agent=mock_agent)
@@ -97,7 +104,14 @@ class TestReasoningBase:
         mock_agent.tool_manager.get_all_tools_schema.return_value = []
 
         class ConcreteReasoning(Reasoning):
-            def plan(self, prompt=None, obs=None, ttl=1, selected_tools=None):
+            def plan(
+                self,
+                prompt=None,
+                obs=None,
+                ttl=1,
+                selected_tools=None,
+                tool_calls="auto",
+            ):
                 pass
 
         reasoning = ConcreteReasoning(agent=mock_agent)
@@ -105,3 +119,38 @@ class TestReasoningBase:
 
         assert isinstance(result_plan, Plan)
         assert result_plan.ttl == 7
+
+    def test_execute_tool_call_respects_tool_calls_override(
+        self, llm_response_factory, mock_agent
+    ):
+        """Test that execute_tool_call forwards the caller's tool choice."""
+        mock_agent.model.steps = 5
+        mock_llm_response = llm_response_factory(content="Final LLM message")
+        mock_agent.llm.generate.return_value = mock_llm_response
+        mock_agent.tool_manager.get_all_tools_schema.return_value = [
+            {"schema": "example"}
+        ]
+
+        class ConcreteReasoning(Reasoning):
+            def plan(
+                self,
+                prompt=None,
+                obs=None,
+                ttl=1,
+                selected_tools=None,
+                tool_calls="auto",
+            ):
+                pass
+
+        reasoning = ConcreteReasoning(agent=mock_agent)
+        reasoning.execute_tool_call(
+            "Execute the plan.",
+            selected_tools=["tool1"],
+            tool_calls="required",
+        )
+
+        mock_agent.llm.generate.assert_called_once_with(
+            prompt="Execute the plan.",
+            tool_schema=[{"schema": "example"}],
+            tool_choice="required",
+        )

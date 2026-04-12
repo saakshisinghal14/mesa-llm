@@ -520,7 +520,7 @@ class TestReWOOWithShortTermMemory:
         assert isinstance(plan, Plan)
         assert memory.step_content["plan"]["content"] == plan_content
         reasoning.execute_tool_call.assert_called_once_with(
-            plan_content, selected_tools=None, ttl=1
+            plan_content, selected_tools=None, ttl=1, tool_calls="auto"
         )
         agent.generate_obs.assert_called_once()
 
@@ -542,7 +542,7 @@ class TestReWOOWithShortTermMemory:
         assert reasoning.current_obs == agent.agenerate_obs.return_value
         assert reasoning.remaining_tool_calls == 0
         reasoning.aexecute_tool_call.assert_awaited_once_with(
-            plan_content, selected_tools=None, ttl=1
+            plan_content, selected_tools=None, ttl=1, tool_calls="auto"
         )
         agent.agenerate_obs.assert_awaited_once()
 
@@ -602,7 +602,7 @@ class TestReWOOWithSTLTMemory:
         assert isinstance(plan, Plan)
         assert memory.step_content["plan"]["content"] == plan_content
         reasoning.execute_tool_call.assert_called_once_with(
-            plan_content, selected_tools=None, ttl=1
+            plan_content, selected_tools=None, ttl=1, tool_calls="auto"
         )
         agent.generate_obs.assert_called_once()
 
@@ -623,7 +623,7 @@ class TestReWOOWithSTLTMemory:
         assert isinstance(plan, Plan)
         assert memory.step_content["plan"]["content"] == plan_content
         reasoning.aexecute_tool_call.assert_awaited_once_with(
-            plan_content, selected_tools=None, ttl=1
+            plan_content, selected_tools=None, ttl=1, tool_calls="auto"
         )
         agent.agenerate_obs.assert_awaited_once()
 
@@ -687,7 +687,7 @@ class TestReWOOWithEpisodicMemory:
         assert entries[0].content["plan"]["importance"] == 3
         assert memory.grade_event_importance.call_count == 1
         reasoning.execute_tool_call.assert_called_once_with(
-            plan_content, selected_tools=None, ttl=1
+            plan_content, selected_tools=None, ttl=1, tool_calls="auto"
         )
 
     def test_async_plan_works(self, monkeypatch):
@@ -711,6 +711,6 @@ class TestReWOOWithEpisodicMemory:
         assert entries[0].content["plan"]["importance"] == 3
         assert memory.grade_event_importance.call_count == 1
         reasoning.aexecute_tool_call.assert_awaited_once_with(
-            plan_content, selected_tools=None, ttl=1
+            plan_content, selected_tools=None, ttl=1, tool_calls="auto"
         )
         agent.agenerate_obs.assert_awaited_once()

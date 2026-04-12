@@ -22,8 +22,8 @@ class ReActReasoning(Reasoning):
         - **agent** (LLMAgent reference)
 
     Methods:
-        - **plan(prompt, obs=None, ttl=1, selected_tools=None)** → *Plan* - Generate synchronous plan with ReAct reasoning
-        - **async aplan(prompt, obs=None, ttl=1, selected_tools=None)** → *Plan* - Generate asynchronous plan with ReAct reasoning
+        - **plan(prompt, obs=None, ttl=1, selected_tools=None, tool_calls="auto")** → *Plan* - Generate synchronous plan with ReAct reasoning
+        - **async aplan(prompt, obs=None, ttl=1, selected_tools=None, tool_calls="auto")** → *Plan* - Generate asynchronous plan with ReAct reasoning
     """
 
     def __init__(self, agent: "LLMAgent"):
@@ -62,9 +62,24 @@ class ReActReasoning(Reasoning):
         obs: Observation | None = None,
         ttl: int = 1,
         selected_tools: list[str] | None = None,
+        tool_calls: str | None = "auto",
     ) -> Plan:
         """
-        Plan the next (ReAct) action based on the current observation and the agent's memory.
+        Plan the next (ReAct) action based on the current observation and the
+        agent's memory.
+
+        ``tool_calls`` controls the execution-phase LiteLLM ``tool_choice``.
+        The reasoning pass still keeps tool use disabled with ``"none"``.
+
+        Supported values in Mesa-LLM are:
+        - ``None``: defer to LiteLLM/provider default behavior. In practice,
+          this usually means no tool calls when no tools are provided and
+          behavior similar to ``"auto"`` when tools are available.
+        - ``"none"``: never return tool calls; return a normal assistant
+          message instead.
+        - ``"auto"``: allow the model to either return a normal assistant
+          message or call one or more tools.
+        - ``"required"``: require the model to call one or more tools.
         """
 
         if obs is None:
@@ -103,6 +118,7 @@ class ReActReasoning(Reasoning):
             formatted_response["action"],
             selected_tools=selected_tools,
             ttl=ttl,
+            tool_calls=tool_calls,
         )
 
         return react_plan
@@ -113,9 +129,23 @@ class ReActReasoning(Reasoning):
         obs: Observation | None = None,
         ttl: int = 1,
         selected_tools: list[str] | None = None,
+        tool_calls: str | None = "auto",
     ) -> Plan:
         """
         Asynchronous version of plan() method for parallel planning.
+
+        ``tool_calls`` controls the execution-phase LiteLLM ``tool_choice``.
+        The reasoning pass still keeps tool use disabled with ``"none"``.
+
+        Supported values in Mesa-LLM are:
+        - ``None``: defer to LiteLLM/provider default behavior. In practice,
+          this usually means no tool calls when no tools are provided and
+          behavior similar to ``"auto"`` when tools are available.
+        - ``"none"``: never return tool calls; return a normal assistant
+          message instead.
+        - ``"auto"``: allow the model to either return a normal assistant
+          message or call one or more tools.
+        - ``"required"``: require the model to call one or more tools.
         """
         if obs is None:
             obs = await self.agent.agenerate_obs()
@@ -154,6 +184,7 @@ class ReActReasoning(Reasoning):
             formatted_response["action"],
             selected_tools=selected_tools,
             ttl=ttl,
+            tool_calls=tool_calls,
         )
 
         return react_plan

@@ -120,6 +120,7 @@ class TestReWOOReasoning:
             "Test plan content",
             selected_tools=None,
             ttl=4,
+            tool_calls="auto",
         )
         mock_agent.generate_obs.assert_called_once()
 
@@ -153,6 +154,41 @@ class TestReWOOReasoning:
 
         assert isinstance(result, Plan)
         assert reasoning.remaining_tool_calls == 1
+
+    def test_plan_with_custom_tool_calls(self, llm_response_factory, mock_agent):
+        """Test plan method forwards a custom execution tool choice."""
+        mock_agent.step_prompt = "Default step prompt"
+        mock_agent.generate_obs.return_value = Observation(
+            step=1, self_state={}, local_state={}
+        )
+        mock_agent.memory = Mock()
+        mock_agent.memory.format_long_term.return_value = "Long term memory"
+        mock_agent.memory.format_short_term.return_value = "Short term memory"
+        mock_agent.memory.add_to_memory = Mock()
+        mock_agent.llm = Mock()
+        mock_agent.tool_manager = Mock()
+        mock_agent.tool_manager.get_all_tools_schema.return_value = {}
+
+        mock_plan_response = llm_response_factory(content="Test plan content")
+        mock_exec_response = llm_response_factory(
+            content="Execution plan",
+            tool_calls=[_tool_call("call_1")],
+        )
+        mock_agent.llm.generate.side_effect = [mock_plan_response, mock_exec_response]
+
+        reasoning = ReWOOReasoning(mock_agent)
+        reasoning.execute_tool_call = Mock(
+            return_value=Plan(step=1, llm_plan=mock_exec_response.choices[0].message)
+        )
+
+        reasoning.plan(tool_calls="required")
+
+        reasoning.execute_tool_call.assert_called_once_with(
+            "Test plan content",
+            selected_tools=None,
+            ttl=1,
+            tool_calls="required",
+        )
 
     def test_plan_with_selected_tools(self, llm_response_factory, mock_agent):
         """Test plan method with selected tools."""
@@ -334,6 +370,7 @@ class TestReWOOReasoning:
             "Async plan content",
             selected_tools=None,
             ttl=7,
+            tool_calls="auto",
         )
         mock_agent.agenerate_obs.assert_awaited_once()
 

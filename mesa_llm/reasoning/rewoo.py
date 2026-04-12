@@ -22,8 +22,8 @@ class ReWOOReasoning(Reasoning):
         - **current_obs** (Observation) - Last observation used for planning
 
     Methods:
-        - **plan(prompt, obs=None, ttl=1, selected_tools=None)** → *Plan* - Generate synchronous plan with ReWOO reasoning
-        - **async aplan(prompt, obs=None, ttl=1, selected_tools=None)** → *Plan* - Generate asynchronous plan with ReWOO reasoning
+        - **plan(prompt, obs=None, ttl=1, selected_tools=None, tool_calls="auto")** → *Plan* - Generate synchronous plan with ReWOO reasoning
+        - **async aplan(prompt, obs=None, ttl=1, selected_tools=None, tool_calls="auto")** → *Plan* - Generate asynchronous plan with ReWOO reasoning
     """
 
     def __init__(self, agent: "LLMAgent"):
@@ -105,9 +105,24 @@ class ReWOOReasoning(Reasoning):
         obs: Observation | None = None,
         ttl: int = 1,
         selected_tools: list[str] | None = None,
+        tool_calls: str | None = "auto",
     ) -> Plan:
         """
-        Plan the next (ReWOO) action based on the current observation and the agent's memory.
+        Plan the next (ReWOO) action based on the current observation and the
+        agent's memory.
+
+        ``tool_calls`` controls the execution-phase LiteLLM ``tool_choice``.
+        The planning pass still keeps tool use disabled with ``"none"``.
+
+        Supported values in Mesa-LLM are:
+        - ``None``: defer to LiteLLM/provider default behavior. In practice,
+          this usually means no tool calls when no tools are provided and
+          behavior similar to ``"auto"`` when tools are available.
+        - ``"none"``: never return tool calls; return a normal assistant
+          message instead.
+        - ``"auto"``: allow the model to either return a normal assistant
+          message or call one or more tools.
+        - ``"required"``: require the model to call one or more tools.
         """
         # If we have remaining tool calls, skip observation and plan generation
         if self.remaining_tool_calls > 0:
@@ -149,6 +164,7 @@ class ReWOOReasoning(Reasoning):
             rsp.choices[0].message.content,
             selected_tools=selected_tools,
             ttl=ttl,
+            tool_calls=tool_calls,
         )
         # Count the number of tool calls in the response and set remaining_tool_calls
         self.remaining_tool_calls = len(
@@ -164,9 +180,23 @@ class ReWOOReasoning(Reasoning):
         obs: Observation | None = None,
         ttl: int = 1,
         selected_tools: list[str] | None = None,
+        tool_calls: str | None = "auto",
     ) -> Plan:
         """
         Asynchronous version of plan() method for parallel planning.
+
+        ``tool_calls`` controls the execution-phase LiteLLM ``tool_choice``.
+        The planning pass still keeps tool use disabled with ``"none"``.
+
+        Supported values in Mesa-LLM are:
+        - ``None``: defer to LiteLLM/provider default behavior. In practice,
+          this usually means no tool calls when no tools are provided and
+          behavior similar to ``"auto"`` when tools are available.
+        - ``"none"``: never return tool calls; return a normal assistant
+          message instead.
+        - ``"auto"``: allow the model to either return a normal assistant
+          message or call one or more tools.
+        - ``"required"``: require the model to call one or more tools.
         """
         # If we have remaining tool calls, skip observation and plan generation
         if self.remaining_tool_calls > 0:
@@ -208,6 +238,7 @@ class ReWOOReasoning(Reasoning):
             rsp.choices[0].message.content,
             selected_tools=selected_tools,
             ttl=ttl,
+            tool_calls=tool_calls,
         )
         # Count the number of tool calls in the response and set remaining_tool_calls
         self.remaining_tool_calls = len(
