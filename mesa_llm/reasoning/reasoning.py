@@ -92,7 +92,10 @@ class Reasoning(ABC):
             obs: Optional observation to plan against.
             ttl: Time-to-live for the generated plan.
             selected_tools: Optional explicit tool allowlist forwarded to
-                ``ToolManager.get_all_tools_schema()``.
+                ``ToolManager.get_all_tools_schema()``. If omitted or ``None``,
+                the default behavior exposes all tools. ``[]`` exposes no
+                tools, and a non-empty list restricts planning/execution to
+                the named tools.
             tool_calls: Execution-phase LiteLLM ``tool_choice`` override used
                 when converting the natural-language plan into tool calls.
                 Planning still keeps tool use disabled.
@@ -124,6 +127,11 @@ class Reasoning(ABC):
         """
         Asynchronous version of plan() method for parallel planning.
         Default implementation calls the synchronous plan() method.
+
+        ``selected_tools`` follows the same contract as ``plan()``: omitting
+        it or passing ``None`` uses the default behavior of exposing all
+        tools, ``[]`` exposes no tools, and a non-empty list restricts
+        planning/execution to the named tools.
         """
         return self.plan(
             prompt=prompt,
@@ -144,7 +152,11 @@ class Reasoning(ABC):
 
         Args:
             chaining_message: Natural-language plan or action text to execute.
-            selected_tools: Optional explicit tool allowlist.
+            selected_tools: Optional explicit tool allowlist forwarded to
+                ``ToolManager.get_all_tools_schema()``. Omitting it or passing
+                ``None`` uses the default behavior of exposing all tools,
+                ``[]`` exposes no tools, and a non-empty list restricts
+                execution to the named tools.
             ttl: Time-to-live for the returned plan.
             tool_calls: LiteLLM ``tool_choice`` passed to the execution call.
                 Supported values in Mesa-LLM are:
@@ -191,6 +203,11 @@ class Reasoning(ABC):
     ):
         """
         Asynchronous version of execute_tool_call() method.
+
+        ``selected_tools`` follows the same contract as
+        ``execute_tool_call()``: omitting it or passing ``None`` uses the
+        default behavior of exposing all tools, ``[]`` exposes no tools, and
+        a non-empty list restricts execution to the named tools.
         """
         system_prompt = (
             "You are an executor that executes the plan given to you in the prompt through tool calls. "

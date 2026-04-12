@@ -60,11 +60,13 @@ def test_apply_plan_adds_to_memory(monkeypatch):
 
     assert resp == fake_response
 
-    action_content = agent.memory.step_content.get("action")
-    assert action_content is not None
-    assert "tool_calls" in action_content
-    assert len(action_content["tool_calls"]) == 1
-    assert action_content["tool_calls"][0] == {"tool": "foo", "argument": "bar"}
+    # "action" is an additive event type, so it is stored as a list
+    assert "action" in agent.memory.step_content
+    actions = agent.memory.step_content["action"]
+    assert isinstance(actions, list)
+    assert len(actions) == 1
+    assert "tool_calls" in actions[0]
+    assert actions[0]["tool_calls"][0] == {"tool": "foo", "argument": "bar"}
 
 
 def test_apply_plan_preserves_multiple_tool_calls(monkeypatch):
@@ -109,15 +111,17 @@ def test_apply_plan_preserves_multiple_tool_calls(monkeypatch):
     plan = Plan(step=0, llm_plan="do something")
     agent.apply_plan(plan)
 
-    action_content = agent.memory.step_content.get("action")
-    assert action_content is not None
-    assert "tool_calls" in action_content
-    assert len(action_content["tool_calls"]) == 2
-    assert action_content["tool_calls"][0] == {
+    # "action" is an additive event type, so it is stored as a list
+    actions = agent.memory.step_content.get("action")
+    assert actions is not None
+    assert isinstance(actions, list) and len(actions) == 1
+    assert "tool_calls" in actions[0]
+    assert len(actions[0]["tool_calls"]) == 2
+    assert actions[0]["tool_calls"][0] == {
         "name": "move_one_step",
         "response": "agent moved to (3, 4)",
     }
-    assert action_content["tool_calls"][1] == {
+    assert actions[0]["tool_calls"][1] == {
         "name": "arrest_citizen",
         "response": "Citizen 12 arrested",
     }
@@ -168,15 +172,17 @@ async def test_aapply_plan_preserves_multiple_tool_calls(monkeypatch):
     plan = Plan(step=0, llm_plan="do something")
     await agent.aapply_plan(plan)
 
-    action_content = agent.memory.step_content.get("action")
-    assert action_content is not None
-    assert "tool_calls" in action_content
-    assert len(action_content["tool_calls"]) == 2
-    assert action_content["tool_calls"][0] == {
+    # "action" is an additive event type, so it is stored as a list
+    actions = agent.memory.step_content.get("action")
+    assert actions is not None
+    assert isinstance(actions, list) and len(actions) == 1
+    assert "tool_calls" in actions[0]
+    assert len(actions[0]["tool_calls"]) == 2
+    assert actions[0]["tool_calls"][0] == {
         "name": "move_one_step",
         "response": "agent moved to (3, 4)",
     }
-    assert action_content["tool_calls"][1] == {
+    assert actions[0]["tool_calls"][1] == {
         "name": "arrest_citizen",
         "response": "Citizen 12 arrested",
     }

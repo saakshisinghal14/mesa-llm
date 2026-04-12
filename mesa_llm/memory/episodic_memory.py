@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from mesa_llm.memory.memory import Memory, MemoryEntry
+from mesa_llm.memory.memory import Memory, MemoryEntry, _format_message_entry
 
 if TYPE_CHECKING:
     from mesa_llm.llm_agent import LLMAgent
@@ -87,7 +87,12 @@ class EpisodicMemory(Memory):
                 "llm_model must be provided for the usage of episodic memory"
             )
 
-        super().__init__(agent, llm_model=llm_model, api_base=api_base, display=display)
+        super().__init__(
+            agent,
+            llm_model=llm_model,
+            api_base=api_base,
+            display=display,
+        )
 
         self.max_capacity = max_capacity
         self.memory_entries = deque(maxlen=self.max_capacity)
@@ -257,13 +262,17 @@ class EpisodicMemory(Memory):
         """
         Get the communication history
         """
-        return "\n".join(
-            [
-                f"step {entry.step}: {entry.content['message']}\n\n"
-                for entry in self.memory_entries
-                if "message" in entry.content
-            ]
-        )
+        lines = []
+        for entry in self.memory_entries:
+            if "message" not in entry.content:
+                continue
+            msgs = entry.content["message"]
+            if isinstance(msgs, list):
+                for msg in msgs:
+                    lines.append(f"Step {entry.step}: {_format_message_entry(msg)}\n\n")
+            else:
+                lines.append(f"Step {entry.step}: {_format_message_entry(msgs)}\n\n")
+        return "\n".join(lines)
 
     async def aprocess_step(self, pre_step: bool = False):
         """

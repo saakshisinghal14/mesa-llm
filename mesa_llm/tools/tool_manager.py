@@ -69,14 +69,28 @@ class ToolManager:
     def get_all_tools_schema(
         self, selected_tools: list[str] | None = None
     ) -> list[dict]:
-        if selected_tools:
-            selected_tools_schema = [
-                self.tools[tool].__tool_schema__ for tool in selected_tools
-            ]
-            return selected_tools_schema
+        """Return schemas for all tools or an explicit selection.
 
-        else:
-            return [fn.__tool_schema__ for fn in self.tools.values()]
+        Omitting ``selected_tools`` or passing ``None`` uses the default
+        behavior of returning all registered tools.
+        ``selected_tools=[]`` returns no tools.
+        A non-empty list returns only the named tools in the given order.
+        """
+        if selected_tools is not None:
+            invalid_tools = [tool for tool in selected_tools if tool not in self.tools]
+            if invalid_tools:
+                available_tools = sorted(self.tools.keys())
+                raise ValueError(
+                    style(
+                        "Unknown tool name(s): "
+                        f"{invalid_tools}. Available tools: {available_tools}",
+                        color="red",
+                    )
+                )
+
+            return [self.tools[tool].__tool_schema__ for tool in selected_tools]
+
+        return [fn.__tool_schema__ for fn in self.tools.values()]
 
     def call(self, name: str, arguments: dict) -> str:
         """Call a registered tool with validated args"""

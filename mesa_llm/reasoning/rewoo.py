@@ -111,6 +111,11 @@ class ReWOOReasoning(Reasoning):
         Plan the next (ReWOO) action based on the current observation and the
         agent's memory.
 
+        ``selected_tools`` is forwarded to ``ToolManager.get_all_tools_schema()``.
+        Omitting it or passing ``None`` uses the default behavior of exposing
+        all tools, ``[]`` exposes no tools, and a non-empty list restricts
+        planning/execution to the named tools.
+
         ``tool_calls`` controls the execution-phase LiteLLM ``tool_choice``.
         The planning pass still keeps tool use disabled with ``"none"``.
 
@@ -184,6 +189,11 @@ class ReWOOReasoning(Reasoning):
     ) -> Plan:
         """
         Asynchronous version of plan() method for parallel planning.
+
+        ``selected_tools`` follows the same contract as ``plan()``: omitting
+        it or passing ``None`` uses the default behavior of exposing all
+        tools, ``[]`` exposes no tools, and a non-empty list restricts
+        planning/execution to the named tools.
 
         ``tool_calls`` controls the execution-phase LiteLLM ``tool_choice``.
         The planning pass still keeps tool use disabled with ``"none"``.
