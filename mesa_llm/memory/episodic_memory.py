@@ -2,7 +2,7 @@ import json
 from collections import deque
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from mesa_llm.memory.memory import Memory, MemoryEntry, _format_message_entry
 
@@ -11,7 +11,9 @@ if TYPE_CHECKING:
 
 
 class EventGrade(BaseModel):
-    grade: int
+    grade: int = Field(
+        description="Integer score representing the importance of the event"
+    )
 
 
 def normalize_dict_values(scores: dict, min_target: float, max_target: float) -> dict:
