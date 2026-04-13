@@ -1,7 +1,7 @@
 import json
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from mesa_llm.reasoning.reasoning import Observation, Plan, Reasoning
 
@@ -10,8 +10,10 @@ if TYPE_CHECKING:
 
 
 class ReActOutput(BaseModel):
-    reasoning: str
-    action: str
+    reasoning: str = Field(
+        description="Step-by-step reasoning about the situation based on memory and observation"
+    )
+    action: str = Field(description="The specific action to take without using tools")
 
 
 class ReActReasoning(Reasoning):
