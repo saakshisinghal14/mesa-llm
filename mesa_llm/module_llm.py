@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from litellm import acompletion, completion, litellm
 from litellm.exceptions import (
     APIConnectionError,
+    NotFoundError,
     RateLimitError,
     Timeout,
 )
@@ -73,11 +74,29 @@ class ModuleLLM:
                     f"No API key found for {provider}. Please set the {provider}_API_KEY environment variable (e.g., in your .env file)."
                 ) from err
 
-        if not litellm.supports_function_calling(model=self.llm_model):
-            logger.warning(
-                "%s does not support function calling. This model may not be able to use tools. Please check the model documentation at https://docs.litellm.ai/docs/providers for more information.",
+        try:
+            litellm.get_model_info(model=self.llm_model)
+        except Exception as exc:
+            logger.debug(
+                "Skipping function-calling capability check for unmapped model %s: %s",
                 self.llm_model,
+                exc,
             )
+        else:
+            if not litellm.supports_function_calling(model=self.llm_model):
+                logger.warning(
+                    "%s does not support function calling. This model may not be able to use tools. Please check the model documentation at https://docs.litellm.ai/docs/providers for more information.",
+                    self.llm_model,
+                )
+
+    def _build_invalid_model_error(self, error: Exception) -> ValueError:
+        provider = self.llm_model.split("/", 1)[0].lower()
+        return ValueError(
+            f"Invalid or unsupported model '{self.llm_model}' for provider "
+            f"'{provider}'. Details: {error}. "
+            "Please verify the model name and provider prefix, and if you are "
+            f"using a custom endpoint set the correct api_base (current: {self.api_base})."
+        )
 
     def _build_messages(self, prompt: str | list[str] | None = None) -> list[dict]:
         """
@@ -177,6 +196,12 @@ class ModuleLLM:
             response = completion(**completion_kwargs)
         except RateLimitError as error:
             raise self._build_rate_limit_error(error) from error
+        except NotFoundError as error:
+            raise self._build_invalid_model_error(error) from error
+        except Exception as error:
+            if str(error).startswith("This model isn't mapped yet."):
+                raise self._build_invalid_model_error(error) from error
+            raise
 
         return response
 
@@ -211,4 +236,10 @@ class ModuleLLM:
                     response = await acompletion(**completion_kwargs)
                 except RateLimitError as error:
                     raise self._build_rate_limit_error(error) from error
+                except NotFoundError as error:
+                    raise self._build_invalid_model_error(error) from error
+                except Exception as error:
+                    if str(error).startswith("This model isn't mapped yet."):
+                        raise self._build_invalid_model_error(error) from error
+                    raise
         return response

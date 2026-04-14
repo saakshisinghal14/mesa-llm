@@ -1,3 +1,6 @@
+import logging
+import warnings
+
 from mesa.agent import Agent
 from mesa.discrete_space import (
     OrthogonalMooreGrid,
@@ -19,21 +22,32 @@ from mesa_llm.reasoning.reasoning import (
 )
 from mesa_llm.tools.tool_manager import ToolManager
 
+logger = logging.getLogger(__name__)
+
 
 class LLMAgent(Agent):
     """
     LLMAgent manages an LLM backend and optionally connects to a memory module.
 
     Parameters:
-        model (Model): The mesa model the agent in linked to.
-        llm_model (str): The model to use for the LLM in the format 'provider/model'. Defaults to 'gemini/gemini-2.0-flash'.
-        system_prompt (str | None): Optional system prompt to be used in LLM completions.
-        reasoning (str): Optional reasoning method to be used in LLM completions.
+        model (Model): The Mesa model the agent belongs to.
+        reasoning (type[Reasoning]): The reasoning strategy used by the agent.
+        llm_model (str): The model to use for the LLM in the format
+            ``provider/model``. Defaults to ``gemini/gemini-2.0-flash``.
+        system_prompt (str | None): Optional system prompt for the LLM.
+        vision (float | None): Observation radius for nearby agents. Use ``-1``
+            to observe all agents in the simulation.
+        internal_state (list[str] | str | None): Optional internal state facts
+            exposed to the reasoning module.
+        step_prompt (str | None): Optional task-specific prompt used to guide
+            the agent each step.
+        api_base (str | None): Optional custom LiteLLM-compatible base URL for
+            self-hosted or remote inference endpoints.
 
     Attributes:
         llm (ModuleLLM): The internal LLM interface used by the agent.
         memory (Memory | None): The memory module attached to this agent, if any.
-
+        tool_manager (ToolManager): The tool registry available to the agent.
     """
 
     def __init__(
@@ -45,25 +59,28 @@ class LLMAgent(Agent):
         vision: float | None = None,
         internal_state: list[str] | str | None = None,
         step_prompt: str | None = None,
+        api_base: str | None = None,
     ):
         super().__init__(model=model)
 
         self.model = model
         self.step_prompt = step_prompt
-        self.llm = ModuleLLM(llm_model=llm_model, system_prompt=system_prompt)
+        self.llm = ModuleLLM(
+            llm_model=llm_model, system_prompt=system_prompt, api_base=api_base
+        )
 
         self.memory = STLTMemory(
             agent=self,
             short_term_capacity=5,
             consolidation_capacity=2,
             llm_model=llm_model,
+            api_base=api_base,
         )
 
         self.tool_manager = ToolManager()
         self.vision = vision
         self.reasoning = reasoning(agent=self)
         self.system_prompt = system_prompt
-        self.is_speaking = False
         self._current_plan = None  # Store current plan for formatting
 
         # display coordination
@@ -78,6 +95,21 @@ class LLMAgent(Agent):
 
     def __str__(self):
         return f"LLMAgent {self.unique_id}"
+
+    def _format_message_status(
+        self, message: str, delivered_ids: list[int], skipped_ids: list[int]
+    ) -> str:
+        """Format direct-message delivery status to match the speak_to tool."""
+        status_parts = []
+        if delivered_ids:
+            status_parts.append(f"sent message {message!r} to {delivered_ids}")
+        if skipped_ids:
+            status_parts.append(
+                f"skipped {skipped_ids} because they have no `memory` attribute"
+            )
+        if not status_parts:
+            return f"Could not send message {message!r}: no matching recipients found."
+        return "; ".join(status_parts)
 
     async def aapply_plan(self, plan: Plan) -> list[dict]:
         """
@@ -162,6 +194,10 @@ class LLMAgent(Agent):
             "internal_state": self.internal_state,
         }
         if self.vision is not None and self.vision > 0:
+            # Early return: agent has no position and no cell — cannot query neighbors
+            if self.pos is None and getattr(self, "cell", None) is None:
+                return self_state, {}
+
             # Check which type of space/grid the model uses
             grid = getattr(self.model, "grid", None)
             space = getattr(self.model, "space", None)
@@ -262,33 +298,69 @@ class LLMAgent(Agent):
         """
         Asynchronous version of send_message.
         """
-        for recipient in [*recipients, self]:
+        delivered_ids = []
+        skipped_ids = []
+        for recipient in recipients:
+            if recipient is self:
+                continue
+            if not hasattr(recipient, "memory"):
+                skipped_ids.append(recipient.unique_id)
+                logger.warning(
+                    "Agent %s has no memory attribute; skipping send_message.",
+                    recipient.unique_id,
+                )
+                continue
+            delivered_ids.append(recipient.unique_id)
             await recipient.memory.aadd_to_memory(
                 type="message",
                 content={
                     "message": message,
                     "sender": self.unique_id,
-                    "recipients": [r.unique_id for r in recipients],
                 },
             )
-
-        return f"{self} → {recipients} : {message}"
+        await self.memory.aadd_to_memory(
+            type="message",
+            content={
+                "message": message,
+                "sender": self.unique_id,
+                "recipients": delivered_ids,
+            },
+        )
+        return self._format_message_status(message, delivered_ids, skipped_ids)
 
     def send_message(self, message: str, recipients: list[Agent]) -> str:
         """
         Send a message to the recipients.
         """
-        for recipient in [*recipients, self]:
+        delivered_ids = []
+        skipped_ids = []
+        for recipient in recipients:
+            if recipient is self:
+                continue
+            if not hasattr(recipient, "memory"):
+                skipped_ids.append(recipient.unique_id)
+                logger.warning(
+                    "Agent %s has no memory attribute; skipping send_message.",
+                    recipient.unique_id,
+                )
+                continue
+            delivered_ids.append(recipient.unique_id)
             recipient.memory.add_to_memory(
                 type="message",
                 content={
                     "message": message,
                     "sender": self.unique_id,
-                    "recipients": [r.unique_id for r in recipients],
                 },
             )
-
-        return f"{self} → {recipients} : {message}"
+        self.memory.add_to_memory(
+            type="message",
+            content={
+                "message": message,
+                "sender": self.unique_id,
+                "recipients": delivered_ids,
+            },
+        )
+        return self._format_message_status(message, delivered_ids, skipped_ids)
 
     async def apre_step(self):
         """
@@ -325,6 +397,18 @@ class LLMAgent(Agent):
 
         raw_step = getattr(self.__class__, "_raw_user_step", None)
         if raw_step is not None:
+            if not getattr(self.__class__, "_warned_sync_astep_fallback", False):
+                warnings.warn(
+                    (
+                        f"{self.__class__.__name__}.astep() is falling back to "
+                        "synchronous step(), which may block the asyncio event "
+                        "loop. Override astep() for non-blocking behavior or use "
+                        "threading parallel stepping."
+                    ),
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                self.__class__._warned_sync_astep_fallback = True
             raw_step(self)
 
         await self.apost_step()

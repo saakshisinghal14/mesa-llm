@@ -1,14 +1,23 @@
+import logging
 import os
 from unittest.mock import patch
 
 import pytest
-from litellm.exceptions import RateLimitError
+from litellm.exceptions import NotFoundError, RateLimitError
 
 from mesa_llm.module_llm import ModuleLLM
 
 
 class TestModuleLLM:
     """Test ModuleLLM class"""
+
+    @pytest.fixture(autouse=True)
+    def _mock_model_catalog_checks(self, monkeypatch):
+        """Keep model validation deterministic in unit tests."""
+
+        monkeypatch.setattr(
+            "mesa_llm.module_llm.litellm.get_model_info", lambda model: {}
+        )
 
     def test_missing_provider_prefix(self):
         """ModuleLLM should raise ValueError when llm_model has no provider prefix."""
@@ -83,10 +92,78 @@ class TestModuleLLM:
         messages = llm._build_messages(prompt=None)
         assert messages == [{"role": "system", "content": ""}]
 
+    def test_model_name_validity(self):
+        # Test initialization with invalid model format
+
+        with pytest.raises(ValueError, match="Invalid model format"):
+            ModuleLLM(llm_model="gpt-4o")
+
+        llm = ModuleLLM(llm_model="openai/gpt-4o")
+        assert llm.llm_model == "openai/gpt-4o"
+
+        llm = ModuleLLM(llm_model="ollama/llama2")
+        assert llm.llm_model == "ollama/llama2"
+
+    def test_custom_api_base_allows_unmapped_model(self, monkeypatch, caplog):
+        def _raise_unmapped(model):
+            raise Exception("This model isn't mapped yet")
+
+        monkeypatch.setattr(
+            "mesa_llm.module_llm.litellm.get_model_info", _raise_unmapped
+        )
+        monkeypatch.setattr(
+            "mesa_llm.module_llm.litellm.supports_function_calling",
+            lambda model: pytest.fail(
+                "supports_function_calling should not run for unmapped models"
+            ),
+        )
+
+        with caplog.at_level(logging.WARNING):
+            llm = ModuleLLM(
+                llm_model="openai/my-local-model",
+                api_base="http://localhost:1234/v1",
+            )
+
+        assert llm.llm_model == "openai/my-local-model"
+        assert llm.api_base == "http://localhost:1234/v1"
+        assert "does not support function calling" not in caplog.text
+
+    def test_generate_invalid_model_name_has_descriptive_error(self, monkeypatch):
+        monkeypatch.setattr(
+            "mesa_llm.module_llm.completion",
+            lambda **kwargs: (_ for _ in ()).throw(
+                NotFoundError(
+                    message="OpenAIException - model_not_found",
+                    model="openai/not-a-real-model",
+                    llm_provider="openai",
+                )
+            ),
+        )
+
+        llm = ModuleLLM(llm_model="openai/not-a-real-model")
+
+        with pytest.raises(ValueError, match="Invalid or unsupported model"):
+            ModuleLLM.generate.__wrapped__(llm, prompt="Hello, how are you?")
+
+    def test_mapped_model_without_function_calling_warns(self, monkeypatch, caplog):
+        monkeypatch.setattr(
+            "mesa_llm.module_llm.litellm.get_model_info", lambda model: {}
+        )
+        monkeypatch.setattr(
+            "mesa_llm.module_llm.litellm.supports_function_calling",
+            lambda model: False,
+        )
+
+        with caplog.at_level(logging.WARNING):
+            ModuleLLM(llm_model="openai/gpt-4o")
+
+        assert "does not support function calling" in caplog.text
+
     def test_generate(self, monkeypatch, llm_response_factory):
         monkeypatch.setattr(
             "mesa_llm.module_llm.completion", lambda **kwargs: llm_response_factory()
         )
+
         # Test generate with string prompt
         llm = ModuleLLM(llm_model="openai/gpt-4o")
         response = llm.generate(prompt="Hello, how are you?")
@@ -219,3 +296,42 @@ class TestModuleLLM:
             "few minutes and try again, or switch to a different model. To check "
             "your quota visit: https://openrouter.ai/docs/api/reference/limits"
         )
+
+    @pytest.mark.asyncio
+    async def test_agenerate_invalid_model_name_has_descriptive_error(
+        self, monkeypatch
+    ):
+        class _SingleAttempt:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        class _SingleAsyncRetrying:
+            def __init__(self, **kwargs):
+                self._yielded = False
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                if self._yielded:
+                    raise StopAsyncIteration
+                self._yielded = True
+                return _SingleAttempt()
+
+        async def _raise_invalid_model(**kwargs):
+            raise Exception(
+                "This model isn't mapped yet. model=openai/not-a-real-model, "
+                "custom_llm_provider=openai. Add it here - "
+                "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json."
+            )
+
+        monkeypatch.setattr("mesa_llm.module_llm.AsyncRetrying", _SingleAsyncRetrying)
+        monkeypatch.setattr("mesa_llm.module_llm.acompletion", _raise_invalid_model)
+
+        llm = ModuleLLM(llm_model="openai/not-a-real-model")
+
+        with pytest.raises(ValueError, match="Invalid or unsupported model"):
+            await llm.agenerate(prompt="Hello, how are you?")
