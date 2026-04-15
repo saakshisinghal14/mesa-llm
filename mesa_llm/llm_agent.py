@@ -189,7 +189,6 @@ class LLMAgent(Agent):
         """
         self_state = {
             "agent_unique_id": self.unique_id,
-            "system_prompt": self.system_prompt,
             "location": (
                 self.pos
                 if self.pos is not None

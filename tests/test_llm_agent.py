@@ -232,6 +232,7 @@ def test_generate_obs_with_one_neighbor(monkeypatch):
     obs = agent.generate_obs()
 
     assert obs.self_state["agent_unique_id"] == 1
+    assert "system_prompt" not in obs.self_state
 
     # we should have exactly one neighboring agent in local_state
     assert len(obs.local_state) == 1

@@ -9,14 +9,16 @@ if TYPE_CHECKING:
 @dataclass
 class Observation:
     """
-    A structured snapshot containing the agent's current step, self-state (internal attributes, location, system context), and local-state (neighboring agents and their properties). This provides complete situational awareness for decision-making.
+    A structured snapshot containing the agent's current step, self-state
+    (internal attributes and location), and local-state (neighboring agents
+    and their properties). This provides complete situational awareness for
+    decision-making.
 
     Attributes:
         step (int): The current simulation time step when the observation is made.
 
         self_state (dict): A dictionary containing comprehensive information about the observing agent itself.
             This includes:
-            - System prompt or role-specific context for LLM reasoning (if used)
             - Internal state such as morale, fear, aggression, fatigue, etc (behavioural).
             - Agent's current location or spatial coordinates
             - Any other agent-specific metadata that could influence decision-making
