@@ -16,7 +16,7 @@ Mesa-LLM leverages various LLM providers through the LiteLLM library. To run the
 
 - **Cloud LLM**: Providers like OpenAI, Anthropic, or Gemini require an API key set in your environment variables.
 
-Refer to the [Prerequisites section](tutorials/first_model.md#prerequisites) in the first tutorial for more details on Ollama setup.
+Refer to the [Tutorial Setup section](tutorials/first_model.md#tutorial-setup) in the first tutorial for more details on Ollama setup.
 
 For provider-specific setup, including cloud API keys and custom Ollama endpoints, see [Basic LLM Setup](apis/module_llm.md#basic-llm-setup) and [Custom API Endpoints](apis/module_llm.md#custom-api-endpoints).
 
