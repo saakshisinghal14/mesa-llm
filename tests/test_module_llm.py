@@ -92,6 +92,10 @@ class TestModuleLLM:
         messages = llm._build_messages(prompt=None)
         assert messages == [{"role": "system", "content": ""}]
 
+        # Test _build_messages with invalid prompt type raises TypeError
+        with pytest.raises(TypeError, match="Invalid prompt type"):
+            llm._build_messages(prompt=123)
+
     def test_model_name_validity(self):
         # Test initialization with invalid model format
 
