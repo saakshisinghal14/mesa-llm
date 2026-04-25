@@ -284,23 +284,17 @@ class TestSTLTMemory:
         assert mock_llm.generate.called
         assert len(memory.short_term_memory) == 0
 
-    def test_observation_tracking(self, mock_agent):
-        """Test that observations are properly tracked and only changes stored"""
+    def test_observation_overwrites_by_default(self, mock_agent):
+        """Observations should overwrite by default unless configured additive."""
         memory = STLTMemory(agent=mock_agent, llm_model="provider/test_model")
 
-        # First observation
         obs1 = {"position": (0, 0), "health": 100}
-        memory.add_to_memory("observation", obs1)
-
-        # Same observation (should not add much to step_content)
-        memory.add_to_memory("observation", obs1)
-
-        # Changed observation
         obs2 = {"position": (1, 1), "health": 90}
+
+        memory.add_to_memory("observation", obs1)
         memory.add_to_memory("observation", obs2)
 
-        # Verify last observation is tracked
-        assert memory.last_observation == obs2
+        assert memory.step_content["observation"] == obs2
 
     def test_get_prompt_ready_returns_str(self, mock_agent):
         """Test that get_prompt_ready returns a str, not a list (issue #116)."""
@@ -332,3 +326,72 @@ class TestSTLTMemory:
         )
         assert "Short term memory:" in result
         assert "Long term memory:" in result
+
+    def test_get_communication_history_nested_dict(self, mock_agent):
+        """
+        Regression test: get_communication_history must produce readable text when
+        the message entry is a nested dict (produced by speak_to).
+
+        speak_to calls:
+            add_to_memory(type="message", content={"message": <text>, "sender": <id>, ...})
+
+        Memory.add_to_memory stores the content dict under step_content["message"], so:
+            entry.content = {"message": {"message": <text>, "sender": <id>, "recipients": [...]}}
+
+        The fixed code must render "Agent <id> says: <text>", not a raw dict.
+        """
+        memory = STLTMemory(agent=mock_agent, llm_model="provider/test_model")
+
+        entry = MemoryEntry(
+            content={
+                "message": {
+                    "message": "regroup at base",
+                    "sender": 3,
+                    "recipients": [1, 2],
+                }
+            },
+            step=10,
+            agent=mock_agent,
+        )
+        memory.short_term_memory.append(entry)
+
+        history = memory.get_communication_history()
+        assert history == "Step 10: Agent 3 says: regroup at base\n\n"
+
+    def test_get_communication_history_skips_non_message_entries(self, mock_agent):
+        """Entries without a top-level 'message' key are excluded from communication history."""
+        memory = STLTMemory(agent=mock_agent, llm_model="provider/test_model")
+
+        entry_obs = MemoryEntry(
+            content={"observation": {"position": (0, 0)}},
+            step=1,
+            agent=mock_agent,
+        )
+        entry_msg = MemoryEntry(
+            content={
+                "message": {"message": "all clear", "sender": 9, "recipients": []}
+            },
+            step=2,
+            agent=mock_agent,
+        )
+        memory.short_term_memory.extend([entry_obs, entry_msg])
+
+        history = memory.get_communication_history()
+
+        assert "all clear" in history
+        assert "position" not in history
+
+    def test_get_communication_history_returns_empty_string_when_no_messages(
+        self, mock_agent
+    ):
+        """Returns an empty string when short-term memory has no message entries."""
+        memory = STLTMemory(agent=mock_agent, llm_model="provider/test_model")
+
+        entry = MemoryEntry(
+            content={"observation": {"data": "nothing to say"}},
+            step=1,
+            agent=mock_agent,
+        )
+        memory.short_term_memory.append(entry)
+
+        assert memory.get_communication_history() == ""

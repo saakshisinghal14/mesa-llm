@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from litellm import acompletion, completion, litellm
 from litellm.exceptions import (
     APIConnectionError,
+    NotFoundError,
     RateLimitError,
     Timeout,
 )
@@ -73,26 +74,52 @@ class ModuleLLM:
                     f"No API key found for {provider}. Please set the {provider}_API_KEY environment variable (e.g., in your .env file)."
                 ) from err
 
-        if not litellm.supports_function_calling(model=self.llm_model):
-            logger.warning(
-                "%s does not support function calling. This model may not be able to use tools. Please check the model documentation at https://docs.litellm.ai/docs/providers for more information.",
+        try:
+            litellm.get_model_info(model=self.llm_model)
+        except Exception as exc:
+            logger.debug(
+                "Skipping function-calling capability check for unmapped model %s: %s",
                 self.llm_model,
+                exc,
             )
+        else:
+            if not litellm.supports_function_calling(model=self.llm_model):
+                logger.warning(
+                    "%s does not support function calling. This model may not be able to use tools. Please check the model documentation at https://docs.litellm.ai/docs/providers for more information.",
+                    self.llm_model,
+                )
 
-    def _build_messages(self, prompt: str | list[str] | None = None) -> list[dict]:
+    def _build_invalid_model_error(self, error: Exception) -> ValueError:
+        provider = self.llm_model.split("/", 1)[0].lower()
+        return ValueError(
+            f"Invalid or unsupported model '{self.llm_model}' for provider "
+            f"'{provider}'. Details: {error}. "
+            "Please verify the model name and provider prefix, and if you are "
+            f"using a custom endpoint set the correct api_base (current: {self.api_base})."
+        )
+
+    def _build_messages(
+        self,
+        prompt: str | list[str] | None = None,
+        system_prompt: str | None = None,
+    ) -> list[dict]:
         """
         Format the prompt messages for the LLM of the form : {"role": ..., "content": ...}
 
         Args:
             prompt: The prompt to generate a response for (str, list of strings, or None)
+            system_prompt: Optional system prompt scoped to this call only.
 
         Returns:
             The messages for the LLM
         """
         messages = []
 
-        # Always include a system message. Default to empty string if no system prompt to support Ollama
-        system_content = self.system_prompt if self.system_prompt else ""
+        # Always include a system message. Default to empty string if no system
+        # prompt to support Ollama.
+        system_content = (
+            self.system_prompt if system_prompt is None else system_prompt
+        ) or ""
         messages.append({"role": "system", "content": system_content})
 
         if prompt:
@@ -147,6 +174,7 @@ class ModuleLLM:
         tool_schema: list[dict] | None = None,
         tool_choice: str = "auto",
         response_format: dict | object | None = None,
+        system_prompt: str | None = None,
     ) -> str:
         """
         Generate a response from the LLM using litellm based on the prompt
@@ -156,12 +184,13 @@ class ModuleLLM:
             tool_schema: The schema of the tools to use
             tool_choice: The choice of tool to use
             response_format: The format of the response
+            system_prompt: Optional system prompt scoped to this call only.
 
         Returns:
             The response from the LLM
         """
 
-        messages = self._build_messages(prompt)
+        messages = self._build_messages(prompt, system_prompt=system_prompt)
 
         completion_kwargs = {
             "model": self.llm_model,
@@ -177,6 +206,12 @@ class ModuleLLM:
             response = completion(**completion_kwargs)
         except RateLimitError as error:
             raise self._build_rate_limit_error(error) from error
+        except NotFoundError as error:
+            raise self._build_invalid_model_error(error) from error
+        except Exception as error:
+            if str(error).startswith("This model isn't mapped yet."):
+                raise self._build_invalid_model_error(error) from error
+            raise
 
         return response
 
@@ -186,11 +221,12 @@ class ModuleLLM:
         tool_schema: list[dict] | None = None,
         tool_choice: str = "auto",
         response_format: dict | object | None = None,
+        system_prompt: str | None = None,
     ) -> str:
         """
         Asynchronous version of generate() method for parallel LLM calls.
         """
-        messages = self._build_messages(prompt)
+        messages = self._build_messages(prompt, system_prompt=system_prompt)
         async for attempt in AsyncRetrying(
             wait=wait_exponential(multiplier=1, min=1, max=60),
             retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
@@ -211,4 +247,10 @@ class ModuleLLM:
                     response = await acompletion(**completion_kwargs)
                 except RateLimitError as error:
                     raise self._build_rate_limit_error(error) from error
+                except NotFoundError as error:
+                    raise self._build_invalid_model_error(error) from error
+                except Exception as error:
+                    if str(error).startswith("This model isn't mapped yet."):
+                        raise self._build_invalid_model_error(error) from error
+                    raise
         return response

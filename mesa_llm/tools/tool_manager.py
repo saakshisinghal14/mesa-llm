@@ -1,10 +1,11 @@
 import asyncio
 import concurrent.futures
+import contextlib
 import inspect
 import json
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, get_type_hints
 
 from terminal_style import style
 
@@ -69,14 +70,28 @@ class ToolManager:
     def get_all_tools_schema(
         self, selected_tools: list[str] | None = None
     ) -> list[dict]:
-        if selected_tools:
-            selected_tools_schema = [
-                self.tools[tool].__tool_schema__ for tool in selected_tools
-            ]
-            return selected_tools_schema
+        """Return schemas for all tools or an explicit selection.
 
-        else:
-            return [fn.__tool_schema__ for fn in self.tools.values()]
+        Omitting ``selected_tools`` or passing ``None`` uses the default
+        behavior of returning all registered tools.
+        ``selected_tools=[]`` returns no tools.
+        A non-empty list returns only the named tools in the given order.
+        """
+        if selected_tools is not None:
+            invalid_tools = [tool for tool in selected_tools if tool not in self.tools]
+            if invalid_tools:
+                available_tools = sorted(self.tools.keys())
+                raise ValueError(
+                    style(
+                        "Unknown tool name(s): "
+                        f"{invalid_tools}. Available tools: {available_tools}",
+                        color="red",
+                    )
+                )
+
+            return [self.tools[tool].__tool_schema__ for tool in selected_tools]
+
+        return [fn.__tool_schema__ for fn in self.tools.values()]
 
     def call(self, name: str, arguments: dict) -> str:
         """Call a registered tool with validated args"""
@@ -125,10 +140,24 @@ class ToolManager:
             sig = inspect.signature(function_to_call)
             expects_agent = "agent" in sig.parameters
 
-            # Filter arguments to only those accepted
-            filtered_args = {
-                k: v for k, v in function_args.items() if k in sig.parameters
-            }
+            # Filter arguments to only those accepted by the function, with type coercion based on annotations
+            try:
+                hints = get_type_hints(function_to_call)
+            except (NameError, AttributeError, TypeError):
+                hints = getattr(function_to_call, "__annotations__", {})
+
+            coerce: dict[type, type] = {float: float, int: int}
+            filtered_args = {}
+            for k, v in function_args.items():
+                if k not in sig.parameters:
+                    continue
+                expected = hints.get(k)
+                coerce_fn = coerce.get(expected)
+                new_value = v
+                if coerce_fn is not None and not isinstance(v, expected):
+                    with contextlib.suppress(ValueError, TypeError):
+                        new_value = coerce_fn(v)
+                filtered_args[k] = new_value
 
             if expects_agent:
                 filtered_args["agent"] = agent

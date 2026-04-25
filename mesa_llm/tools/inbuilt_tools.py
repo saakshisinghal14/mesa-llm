@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -203,6 +204,19 @@ def speak_to(
         listener_agents_unique_ids: The unique ids of the agents receiving the message
         message: The message to send
     """
+    if isinstance(listener_agents_unique_ids, str):
+        try:
+            listener_agents_unique_ids = json.loads(listener_agents_unique_ids)
+        except (json.JSONDecodeError, ValueError):
+            listener_agents_unique_ids = [
+                int(x.strip())
+                for x in listener_agents_unique_ids.strip("[]").split(",")
+                if x.strip()
+            ]
+    listener_agents_unique_ids = [
+        int(uid) for uid in (listener_agents_unique_ids or [])
+    ]
+
     listener_agents = [
         listener_agent
         for listener_agent in agent.model.agents

@@ -22,8 +22,8 @@ class ReWOOReasoning(Reasoning):
         - **current_obs** (Observation) - Last observation used for planning
 
     Methods:
-        - **plan(prompt, obs=None, ttl=1, selected_tools=None)** → *Plan* - Generate synchronous plan with ReWOO reasoning
-        - **async aplan(prompt, obs=None, ttl=1, selected_tools=None)** → *Plan* - Generate asynchronous plan with ReWOO reasoning
+        - **plan(prompt, obs=None, ttl=1, selected_tools=None, tool_calls="auto")** → *Plan* - Generate synchronous plan with ReWOO reasoning
+        - **async aplan(prompt, obs=None, ttl=1, selected_tools=None, tool_calls="auto")** → *Plan* - Generate asynchronous plan with ReWOO reasoning
     """
 
     def __init__(self, agent: "LLMAgent"):
@@ -34,6 +34,14 @@ class ReWOOReasoning(Reasoning):
 
     def get_rewoo_system_prompt(self, obs: Observation) -> str:
         memory = getattr(self.agent, "memory", None)
+        agent_persona = getattr(self.agent, "system_prompt", None)
+        persona_section = ""
+        if isinstance(agent_persona, str) and agent_persona.strip():
+            persona_section = (
+                "\n        ---\n\n"
+                "        # Agent Persona\n"
+                f"        {agent_persona.strip()}\n"
+            )
 
         long_term_memory = ""
         if (
@@ -55,6 +63,7 @@ class ReWOOReasoning(Reasoning):
         You are an autonomous agent that creates multi-step plans without re-observing during execution.
         Using the ReWOO (Reasoning WithOut Observation) approach, you will create a comprehensive plan
         that anticipates multiple steps ahead based on your current observation and memory.
+{persona_section}
 
         ---
 
@@ -105,9 +114,29 @@ class ReWOOReasoning(Reasoning):
         obs: Observation | None = None,
         ttl: int = 1,
         selected_tools: list[str] | None = None,
+        tool_calls: str | None = "auto",
     ) -> Plan:
         """
-        Plan the next (ReWOO) action based on the current observation and the agent's memory.
+        Plan the next (ReWOO) action based on the current observation and the
+        agent's memory.
+
+        ``selected_tools`` is forwarded to ``ToolManager.get_all_tools_schema()``.
+        Omitting it or passing ``None`` uses the default behavior of exposing
+        all tools, ``[]`` exposes no tools, and a non-empty list restricts
+        planning/execution to the named tools.
+
+        ``tool_calls`` controls the execution-phase LiteLLM ``tool_choice``.
+        The planning pass still keeps tool use disabled with ``"none"``.
+
+        Supported values in Mesa-LLM are:
+        - ``None``: defer to LiteLLM/provider default behavior. In practice,
+          this usually means no tool calls when no tools are provided and
+          behavior similar to ``"auto"`` when tools are available.
+        - ``"none"``: never return tool calls; return a normal assistant
+          message instead.
+        - ``"auto"``: allow the model to either return a normal assistant
+          message or call one or more tools.
+        - ``"required"``: require the model to call one or more tools.
         """
         # If we have remaining tool calls, skip observation and plan generation
         if self.remaining_tool_calls > 0:
@@ -134,11 +163,11 @@ class ReWOOReasoning(Reasoning):
         llm = self.agent.llm
         system_prompt = self.get_rewoo_system_prompt(self.current_obs)
 
-        llm.system_prompt = system_prompt
         rsp = llm.generate(
             prompt=prompt,
             tool_schema=self.agent.tool_manager.get_all_tools_schema(selected_tools),
             tool_choice="none",
+            system_prompt=system_prompt,
         )
 
         self.agent.memory.add_to_memory(
@@ -149,12 +178,12 @@ class ReWOOReasoning(Reasoning):
             rsp.choices[0].message.content,
             selected_tools=selected_tools,
             ttl=ttl,
+            tool_calls=tool_calls,
         )
         # Count the number of tool calls in the response and set remaining_tool_calls
-        if hasattr(rewoo_plan.llm_plan, "tool_calls"):
-            self.remaining_tool_calls = len(rewoo_plan.llm_plan.tool_calls)
-        else:
-            self.remaining_tool_calls = 0
+        self.remaining_tool_calls = len(
+            getattr(rewoo_plan.llm_plan, "tool_calls", None) or []
+        )
         self.current_plan = rewoo_plan.llm_plan
 
         return rewoo_plan
@@ -165,9 +194,28 @@ class ReWOOReasoning(Reasoning):
         obs: Observation | None = None,
         ttl: int = 1,
         selected_tools: list[str] | None = None,
+        tool_calls: str | None = "auto",
     ) -> Plan:
         """
         Asynchronous version of plan() method for parallel planning.
+
+        ``selected_tools`` follows the same contract as ``plan()``: omitting
+        it or passing ``None`` uses the default behavior of exposing all
+        tools, ``[]`` exposes no tools, and a non-empty list restricts
+        planning/execution to the named tools.
+
+        ``tool_calls`` controls the execution-phase LiteLLM ``tool_choice``.
+        The planning pass still keeps tool use disabled with ``"none"``.
+
+        Supported values in Mesa-LLM are:
+        - ``None``: defer to LiteLLM/provider default behavior. In practice,
+          this usually means no tool calls when no tools are provided and
+          behavior similar to ``"auto"`` when tools are available.
+        - ``"none"``: never return tool calls; return a normal assistant
+          message instead.
+        - ``"auto"``: allow the model to either return a normal assistant
+          message or call one or more tools.
+        - ``"required"``: require the model to call one or more tools.
         """
         # If we have remaining tool calls, skip observation and plan generation
         if self.remaining_tool_calls > 0:
@@ -194,14 +242,14 @@ class ReWOOReasoning(Reasoning):
         llm = self.agent.llm
         system_prompt = self.get_rewoo_system_prompt(self.current_obs)
 
-        llm.system_prompt = system_prompt
         rsp = await llm.agenerate(
             prompt=prompt,
             tool_schema=self.agent.tool_manager.get_all_tools_schema(selected_tools),
             tool_choice="none",
+            system_prompt=system_prompt,
         )
 
-        self.agent.memory.add_to_memory(
+        await self.agent.memory.aadd_to_memory(
             type="plan", content={"content": rsp.choices[0].message.content}
         )
 
@@ -209,12 +257,12 @@ class ReWOOReasoning(Reasoning):
             rsp.choices[0].message.content,
             selected_tools=selected_tools,
             ttl=ttl,
+            tool_calls=tool_calls,
         )
         # Count the number of tool calls in the response and set remaining_tool_calls
-        if hasattr(rewoo_plan.llm_plan, "tool_calls"):
-            self.remaining_tool_calls = len(rewoo_plan.llm_plan.tool_calls)
-        else:
-            self.remaining_tool_calls = 0
+        self.remaining_tool_calls = len(
+            getattr(rewoo_plan.llm_plan, "tool_calls", None) or []
+        )
         self.current_plan = rewoo_plan.llm_plan
 
         return rewoo_plan

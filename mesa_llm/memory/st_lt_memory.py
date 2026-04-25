@@ -1,7 +1,7 @@
 from collections import deque
 from typing import TYPE_CHECKING
 
-from mesa_llm.memory.memory import Memory, MemoryEntry
+from mesa_llm.memory.memory import Memory, MemoryEntry, _format_message_entry
 
 if TYPE_CHECKING:
     from mesa_llm.llm_agent import LLMAgent
@@ -18,6 +18,8 @@ class STLTMemory(Memory):
         - A short term memory who stores the n (int) most recent interactions (observations, planning, discussions)
         - A long term memory that is a summary of the memories that are removed from short term memory (summary
         completed/refactored as it goes)
+        - Event types in ``additive_event_types`` accumulate within a step.
+          Defaults to ``{"message", "action"}``.
 
     Logic behind the implementation
         - **Short-term capacity**: Configurable number of recent memory entries (default: short_term_capacity = 5)
@@ -34,6 +36,7 @@ class STLTMemory(Memory):
         display: bool = True,
         llm_model: str | None = None,
         api_base: str | None = None,
+        additive_event_types: list[str] | set[str] | tuple[str, ...] | None = None,
     ):
         """
         Initialize the memory
@@ -43,6 +46,9 @@ class STLTMemory(Memory):
             llm_model : the model to use for the summarization
             api_base : the API base URL to use for the LLM provider
             agent : the agent that the memory belongs to
+            additive_event_types : event types that accumulate multiple values
+                within a step instead of overwriting. Defaults to
+                ``{"message", "action"}``.
         """
         if not llm_model:
             raise ValueError(
@@ -54,6 +60,7 @@ class STLTMemory(Memory):
             llm_model=llm_model,
             api_base=api_base,
             display=display,
+            additive_event_types=additive_event_types,
         )
 
         self.capacity = short_term_capacity
@@ -139,10 +146,12 @@ class STLTMemory(Memory):
             return None, []
 
         pre_step_entry = self.short_term_memory.pop()
-        self.step_content.update(pre_step_entry.content)
+        merged_content = self._merge_step_contents(
+            self.step_content, pre_step_entry.content
+        )
         new_entry = MemoryEntry(
             agent=self.agent,
-            content=self.step_content,
+            content=merged_content,
             step=self.agent.model.steps,
         )
         self.short_term_memory.append(new_entry)
@@ -224,10 +233,14 @@ class STLTMemory(Memory):
         """
         Get the communication history
         """
-        return "\n".join(
-            [
-                f"step {entry.step}: {entry.content['message']}\n\n"
-                for entry in self.short_term_memory
-                if "message" in entry.content
-            ]
-        )
+        lines = []
+        for entry in self.short_term_memory:
+            if "message" not in entry.content:
+                continue
+            msgs = entry.content["message"]
+            if isinstance(msgs, list):
+                for msg in msgs:
+                    lines.append(f"Step {entry.step}: {_format_message_entry(msg)}\n\n")
+            else:
+                lines.append(f"Step {entry.step}: {_format_message_entry(msgs)}\n\n")
+        return "\n".join(lines)

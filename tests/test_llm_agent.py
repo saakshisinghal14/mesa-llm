@@ -1,7 +1,8 @@
 # tests/test_llm_agent.py
 
 import json
-import re
+import logging
+import warnings
 
 import pytest
 from mesa.agent import Agent
@@ -60,11 +61,13 @@ def test_apply_plan_adds_to_memory(monkeypatch):
 
     assert resp == fake_response
 
-    action_content = agent.memory.step_content.get("action")
-    assert action_content is not None
-    assert "tool_calls" in action_content
-    assert len(action_content["tool_calls"]) == 1
-    assert action_content["tool_calls"][0] == {"tool": "foo", "argument": "bar"}
+    # "action" is an additive event type, so it is stored as a list
+    assert "action" in agent.memory.step_content
+    actions = agent.memory.step_content["action"]
+    assert isinstance(actions, list)
+    assert len(actions) == 1
+    assert "tool_calls" in actions[0]
+    assert actions[0]["tool_calls"][0] == {"tool": "foo", "argument": "bar"}
 
 
 def test_apply_plan_preserves_multiple_tool_calls(monkeypatch):
@@ -109,15 +112,17 @@ def test_apply_plan_preserves_multiple_tool_calls(monkeypatch):
     plan = Plan(step=0, llm_plan="do something")
     agent.apply_plan(plan)
 
-    action_content = agent.memory.step_content.get("action")
-    assert action_content is not None
-    assert "tool_calls" in action_content
-    assert len(action_content["tool_calls"]) == 2
-    assert action_content["tool_calls"][0] == {
+    # "action" is an additive event type, so it is stored as a list
+    actions = agent.memory.step_content.get("action")
+    assert actions is not None
+    assert isinstance(actions, list) and len(actions) == 1
+    assert "tool_calls" in actions[0]
+    assert len(actions[0]["tool_calls"]) == 2
+    assert actions[0]["tool_calls"][0] == {
         "name": "move_one_step",
         "response": "agent moved to (3, 4)",
     }
-    assert action_content["tool_calls"][1] == {
+    assert actions[0]["tool_calls"][1] == {
         "name": "arrest_citizen",
         "response": "Citizen 12 arrested",
     }
@@ -168,15 +173,17 @@ async def test_aapply_plan_preserves_multiple_tool_calls(monkeypatch):
     plan = Plan(step=0, llm_plan="do something")
     await agent.aapply_plan(plan)
 
-    action_content = agent.memory.step_content.get("action")
-    assert action_content is not None
-    assert "tool_calls" in action_content
-    assert len(action_content["tool_calls"]) == 2
-    assert action_content["tool_calls"][0] == {
+    # "action" is an additive event type, so it is stored as a list
+    actions = agent.memory.step_content.get("action")
+    assert actions is not None
+    assert isinstance(actions, list) and len(actions) == 1
+    assert "tool_calls" in actions[0]
+    assert len(actions[0]["tool_calls"]) == 2
+    assert actions[0]["tool_calls"][0] == {
         "name": "move_one_step",
         "response": "agent moved to (3, 4)",
     }
-    assert action_content["tool_calls"][1] == {
+    assert actions[0]["tool_calls"][1] == {
         "name": "arrest_citizen",
         "response": "Citizen 12 arrested",
     }
@@ -225,6 +232,7 @@ def test_generate_obs_with_one_neighbor(monkeypatch):
     obs = agent.generate_obs()
 
     assert obs.self_state["agent_unique_id"] == 1
+    assert "system_prompt" not in obs.self_state
 
     # we should have exactly one neighboring agent in local_state
     assert len(obs.local_state) == 1
@@ -289,8 +297,7 @@ def test_send_message_updates_both_agents_memory(monkeypatch):
     monkeypatch.setattr(recipient.memory, "add_to_memory", fake_recipient_add_to_memory)
 
     result = sender.send_message("hello", recipients=[recipient])
-    pattern = r"LLMAgent 1 → \[<mesa_llm\.llm_agent\.LLMAgent object at 0x[0-9A-Fa-f]+>\] : hello"
-    assert re.match(pattern, result)
+    assert result == "sent message 'hello' to [2]"
 
     # sender + recipient memory => should be called twice
     assert len(recorded_calls) == 2
@@ -363,8 +370,7 @@ async def test_asend_message_updates_both_agents_memory(monkeypatch):
     )
 
     result = await sender.asend_message("hello", recipients=[recipient])
-    pattern = r"LLMAgent 1 → \[<mesa_llm\.llm_agent\.LLMAgent object at 0x[0-9A-Fa-f]+>\] : hello"
-    assert re.match(pattern, result)
+    assert result == "sent message 'hello' to [2]"
 
     assert len(recorded_calls) == 2
     sender_call = next(call for label, call in recorded_calls if label == "sender")
@@ -514,6 +520,45 @@ async def test_async_wrapper_calls_pre_and_post(monkeypatch):
     assert calls["pre"] == 1
     assert calls["post"] == 1
     assert agent.user_called is True
+
+
+@pytest.mark.asyncio
+async def test_astep_fallback_warns_once_for_step_only_subclass(monkeypatch):
+    class StepOnlyAgent(LLMAgent):
+        def step(self):
+            self.step_calls = getattr(self, "step_calls", 0) + 1
+
+    class DummyModel(Model):
+        def __init__(self):
+            super().__init__(rng=1)
+            self.grid = MultiGrid(3, 3, torus=False)
+
+    model = DummyModel()
+
+    agent = StepOnlyAgent.create_agents(
+        model,
+        n=1,
+        reasoning=lambda agent: None,
+        system_prompt="test",
+        vision=-1,
+        internal_state=[],
+    ).to_list()[0]
+
+    monkeypatch.setattr(agent.memory, "process_step", lambda pre_step=False: None)
+
+    async def fake_aprocess_step(pre_step=False):
+        return None
+
+    monkeypatch.setattr(agent.memory, "aprocess_step", fake_aprocess_step)
+
+    with pytest.warns(RuntimeWarning, match="Override astep\\(\\)"):
+        await agent.astep()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        await agent.astep()
+
+    assert agent.step_calls == 2
 
 
 class MockCell:
@@ -929,6 +974,25 @@ def test_send_message_stores_serializable_ids(monkeypatch):
     assert data["message"] == "hello"
 
 
+# ---------------------------------------------------------------------------
+# recorder attribute initialised to None (#218)
+# ---------------------------------------------------------------------------
+
+
+def test_llm_agent_has_recorder_attribute():
+    """LLMAgent instances must expose a `recorder` attribute so that
+    @record_model can attach a SimulationRecorder via hasattr()."""
+    model = Model(rng=42)
+    agent = LLMAgent(
+        model=model,
+        reasoning=ReActReasoning,
+        system_prompt="test",
+    )
+
+    assert hasattr(agent, "recorder")
+    assert agent.recorder is None
+
+
 @pytest.mark.asyncio
 async def test_asend_message_stores_serializable_ids(monkeypatch):
     """asend_message stores sender/recipients as unique_ids, not Agent objects."""
@@ -957,3 +1021,141 @@ async def test_asend_message_stores_serializable_ids(monkeypatch):
     assert data["sender"] == 10
     assert data["message"] == "hello"
     assert "recipients" not in data
+
+
+def test_send_message_skips_non_llm_recipient(monkeypatch, caplog):
+    """send_message should mirror speak_to when a recipient has no memory."""
+    sender, recipient = _make_send_message_model(monkeypatch)
+
+    class RuleAgent(Agent):
+        def step(self):
+            pass
+
+    skipped = RuleAgent(model=sender.model)
+    skipped.unique_id = 30
+    sender.model.grid.place_agent(skipped, (2, 2))
+
+    recorded_calls = []
+
+    def fake_sender_add_to_memory(*args, **kwargs):
+        recorded_calls.append(("sender", kwargs))
+
+    def fake_recipient_add_to_memory(*args, **kwargs):
+        recorded_calls.append(("recipient", kwargs))
+
+    monkeypatch.setattr(sender.memory, "add_to_memory", fake_sender_add_to_memory)
+    monkeypatch.setattr(recipient.memory, "add_to_memory", fake_recipient_add_to_memory)
+
+    with caplog.at_level(logging.WARNING, logger="mesa_llm.llm_agent"):
+        result = sender.send_message("hello", recipients=[recipient, skipped])
+
+    assert result == (
+        "sent message 'hello' to [20]; skipped [30] because they have no `memory` attribute"
+    )
+    assert len(recorded_calls) == 2
+    sender_call = next(call for label, call in recorded_calls if label == "sender")
+    recipient_call = next(
+        call for label, call in recorded_calls if label == "recipient"
+    )
+    assert sender_call["content"]["recipients"] == [20]
+    assert recipient_call["content"]["sender"] == 10
+    assert any(
+        "30" in record.message and "send_message" in record.message
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_asend_message_skips_non_llm_recipient(monkeypatch, caplog):
+    """asend_message should mirror speak_to when a recipient has no memory."""
+    sender, recipient = _make_send_message_model(monkeypatch)
+
+    class RuleAgent(Agent):
+        def step(self):
+            pass
+
+    skipped = RuleAgent(model=sender.model)
+    skipped.unique_id = 30
+    sender.model.grid.place_agent(skipped, (2, 2))
+
+    recorded_calls = []
+
+    async def fake_sender_add_to_memory(*args, **kwargs):
+        recorded_calls.append(("sender", kwargs))
+
+    async def fake_recipient_add_to_memory(*args, **kwargs):
+        recorded_calls.append(("recipient", kwargs))
+
+    monkeypatch.setattr(sender.memory, "aadd_to_memory", fake_sender_add_to_memory)
+    monkeypatch.setattr(
+        recipient.memory, "aadd_to_memory", fake_recipient_add_to_memory
+    )
+
+    with caplog.at_level(logging.WARNING, logger="mesa_llm.llm_agent"):
+        result = await sender.asend_message("hello", recipients=[recipient, skipped])
+
+    assert result == (
+        "sent message 'hello' to [20]; skipped [30] because they have no `memory` attribute"
+    )
+    assert len(recorded_calls) == 2
+    sender_call = next(call for label, call in recorded_calls if label == "sender")
+    recipient_call = next(
+        call for label, call in recorded_calls if label == "recipient"
+    )
+    assert sender_call["content"]["recipients"] == [20]
+    assert recipient_call["content"]["sender"] == 10
+    assert any(
+        "30" in record.message and "send_message" in record.message
+        for record in caplog.records
+    )
+
+
+# ---------------------------------------------------------------------------
+# _build_observation — None pos handling (#244)
+# ---------------------------------------------------------------------------
+
+
+def test_generate_obs_with_none_pos(monkeypatch):
+    """generate_obs must not crash when agent.pos is None and has no cell."""
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy")
+
+    class DummyModel(Model):
+        def __init__(self):
+            super().__init__(rng=42)
+            self.grid = MultiGrid(3, 3, torus=False)
+
+    model = DummyModel()
+
+    agent = LLMAgent.create_agents(
+        model,
+        n=1,
+        reasoning=ReActReasoning,
+        system_prompt="Test prompt",
+        vision=1,
+        internal_state=[],
+    ).to_list()[0]
+
+    # Agent is explicitly NOT placed on the grid
+    agent.pos = None
+    if hasattr(agent, "cell"):
+        delattr(agent, "cell")
+
+    monkeypatch.setattr(agent.memory, "add_to_memory", lambda *args, **kwargs: None)
+
+    obs = agent.generate_obs()
+
+    assert obs is not None
+    assert obs.self_state["location"] is None
+    assert len(obs.local_state) == 0
+
+
+def test_system_prompt_proxies_llm_prompt(basic_agent):
+    """Agent system_prompt should proxy the underlying LLM prompt state."""
+    basic_agent.system_prompt = "Updated prompt"
+
+    assert basic_agent.system_prompt == "Updated prompt"
+    assert basic_agent.llm.system_prompt == "Updated prompt"
+
+    basic_agent.llm.system_prompt = "LLM prompt"
+
+    assert basic_agent.system_prompt == "LLM prompt"

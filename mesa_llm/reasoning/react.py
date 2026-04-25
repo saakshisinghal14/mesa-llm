@@ -1,7 +1,7 @@
 import json
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from mesa_llm.reasoning.reasoning import Observation, Plan, Reasoning
 
@@ -10,8 +10,10 @@ if TYPE_CHECKING:
 
 
 class ReActOutput(BaseModel):
-    reasoning: str
-    action: str
+    reasoning: str = Field(
+        description="Step-by-step reasoning about the situation based on memory and observation"
+    )
+    action: str = Field(description="The specific action to take without using tools")
 
 
 class ReActReasoning(Reasoning):
@@ -22,19 +24,26 @@ class ReActReasoning(Reasoning):
         - **agent** (LLMAgent reference)
 
     Methods:
-        - **plan(prompt, obs=None, ttl=1, selected_tools=None)** → *Plan* - Generate synchronous plan with ReAct reasoning
-        - **async aplan(prompt, obs=None, ttl=1, selected_tools=None)** → *Plan* - Generate asynchronous plan with ReAct reasoning
+        - **plan(prompt, obs=None, ttl=1, selected_tools=None, tool_calls="auto")** → *Plan* - Generate synchronous plan with ReAct reasoning
+        - **async aplan(prompt, obs=None, ttl=1, selected_tools=None, tool_calls="auto")** → *Plan* - Generate asynchronous plan with ReAct reasoning
     """
 
     def __init__(self, agent: "LLMAgent"):
         super().__init__(agent=agent)
 
     def get_react_system_prompt(self) -> str:
-        system_prompt = """
+        agent_persona = getattr(self.agent, "system_prompt", None)
+        persona_section = ""
+        if isinstance(agent_persona, str) and agent_persona.strip():
+            persona_section = (
+                f"\n        # Agent Persona\n        {agent_persona.strip()}\n"
+            )
+        system_prompt = f"""
         You are an autonomous agent in a simulation environment.
         You can think about your situation and describe your plan.
         Use your short-term and/or long-term memory to guide your behavior.
         You should also use the current observation you have made of the environrment to take suitable actions.
+{persona_section}
 
         # Instructions
         Based on the information given to you, think about what you should do with proper reasoning, And then decide your plan of action. Respond in the
@@ -62,16 +71,36 @@ class ReActReasoning(Reasoning):
         obs: Observation | None = None,
         ttl: int = 1,
         selected_tools: list[str] | None = None,
+        tool_calls: str | None = "auto",
     ) -> Plan:
         """
-        Plan the next (ReAct) action based on the current observation and the agent's memory.
+        Plan the next (ReAct) action based on the current observation and the
+        agent's memory.
+
+        ``selected_tools`` is forwarded to ``ToolManager.get_all_tools_schema()``.
+        Omitting it or passing ``None`` uses the default behavior of exposing
+        all tools, ``[]`` exposes no tools, and a non-empty list restricts
+        planning/execution to the named tools.
+
+        ``tool_calls`` controls the execution-phase LiteLLM ``tool_choice``.
+        The reasoning pass still keeps tool use disabled with ``"none"``.
+
+        Supported values in Mesa-LLM are:
+        - ``None``: defer to LiteLLM/provider default behavior. In practice,
+          this usually means no tool calls when no tools are provided and
+          behavior similar to ``"auto"`` when tools are available.
+        - ``"none"``: never return tool calls; return a normal assistant
+          message instead.
+        - ``"auto"``: allow the model to either return a normal assistant
+          message or call one or more tools.
+        - ``"required"``: require the model to call one or more tools.
         """
 
         if obs is None:
             obs = self.agent.generate_obs()
 
         # ---------------- prepare the prompt ----------------
-        self.agent.llm.system_prompt = self.get_react_system_prompt()
+        react_system_prompt = self.get_react_system_prompt()
         prompt_list = self.get_react_prompt(obs)
 
         # Add user prompt (explicit prompt takes precedence over default step prompt)
@@ -92,6 +121,7 @@ class ReActReasoning(Reasoning):
             tool_schema=selected_tools_schema,
             tool_choice="none",
             response_format=ReActOutput,
+            system_prompt=react_system_prompt,
         )
 
         formatted_response = json.loads(rsp.choices[0].message.content)
@@ -103,6 +133,7 @@ class ReActReasoning(Reasoning):
             formatted_response["action"],
             selected_tools=selected_tools,
             ttl=ttl,
+            tool_calls=tool_calls,
         )
 
         return react_plan
@@ -113,15 +144,34 @@ class ReActReasoning(Reasoning):
         obs: Observation | None = None,
         ttl: int = 1,
         selected_tools: list[str] | None = None,
+        tool_calls: str | None = "auto",
     ) -> Plan:
         """
         Asynchronous version of plan() method for parallel planning.
+
+        ``selected_tools`` follows the same contract as ``plan()``: omitting
+        it or passing ``None`` uses the default behavior of exposing all
+        tools, ``[]`` exposes no tools, and a non-empty list restricts
+        planning/execution to the named tools.
+
+        ``tool_calls`` controls the execution-phase LiteLLM ``tool_choice``.
+        The reasoning pass still keeps tool use disabled with ``"none"``.
+
+        Supported values in Mesa-LLM are:
+        - ``None``: defer to LiteLLM/provider default behavior. In practice,
+          this usually means no tool calls when no tools are provided and
+          behavior similar to ``"auto"`` when tools are available.
+        - ``"none"``: never return tool calls; return a normal assistant
+          message instead.
+        - ``"auto"``: allow the model to either return a normal assistant
+          message or call one or more tools.
+        - ``"required"``: require the model to call one or more tools.
         """
         if obs is None:
             obs = await self.agent.agenerate_obs()
 
         # ---------------- prepare the prompt ----------------
-        self.agent.llm.system_prompt = self.get_react_system_prompt()
+        react_system_prompt = self.get_react_system_prompt()
         prompt_list = self.get_react_prompt(obs)
 
         # Add user prompt (explicit prompt takes precedence over default step prompt)
@@ -143,6 +193,7 @@ class ReActReasoning(Reasoning):
             tool_schema=selected_tools_schema,
             tool_choice="none",
             response_format=ReActOutput,
+            system_prompt=react_system_prompt,
         )
 
         formatted_response = json.loads(rsp.choices[0].message.content)
@@ -154,6 +205,7 @@ class ReActReasoning(Reasoning):
             formatted_response["action"],
             selected_tools=selected_tools,
             ttl=ttl,
+            tool_calls=tool_calls,
         )
 
         return react_plan

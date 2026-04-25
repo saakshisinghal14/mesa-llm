@@ -175,6 +175,63 @@ def test_speak_to_records_on_recipients(mocker):
     assert ret == "sent message 'Hello there' to [11, 12]"
 
 
+def test_speak_to_parses_json_string_ids(mocker):
+    model = DummyModel()
+
+    sender = DummyAgent(unique_id=1, model=model)
+    r1 = DummyAgent(unique_id=2, model=model)
+    r2 = DummyAgent(unique_id=3, model=model)
+
+    r1.memory = SimpleNamespace(add_to_memory=mocker.Mock())
+    r2.memory = SimpleNamespace(add_to_memory=mocker.Mock())
+
+    model.agents = [sender, r1, r2]
+
+    ret = speak_to(sender, "[2, 3]", "ping")
+
+    r1.memory.add_to_memory.assert_called_once()
+    r2.memory.add_to_memory.assert_called_once()
+    assert "ping" in ret and "[2, 3]" in ret
+
+
+def test_speak_to_parses_bracketed_string_ids(mocker):
+    model = DummyModel()
+
+    sender = DummyAgent(unique_id=4, model=model)
+    r1 = DummyAgent(unique_id=5, model=model)
+    r2 = DummyAgent(unique_id=6, model=model)
+
+    r1.memory = SimpleNamespace(add_to_memory=mocker.Mock())
+    r2.memory = SimpleNamespace(add_to_memory=mocker.Mock())
+
+    model.agents = [sender, r1, r2]
+
+    ret = speak_to(sender, "[5, 6]", "hello")
+
+    r1.memory.add_to_memory.assert_called_once()
+    r2.memory.add_to_memory.assert_called_once()
+    assert "hello" in ret and "[5, 6]" in ret
+
+
+def test_speak_to_parses_non_json_string_ids(mocker):
+    model = DummyModel()
+
+    sender = DummyAgent(unique_id=7, model=model)
+    r1 = DummyAgent(unique_id=8, model=model)
+    r2 = DummyAgent(unique_id=9, model=model)
+
+    r1.memory = SimpleNamespace(add_to_memory=mocker.Mock())
+    r2.memory = SimpleNamespace(add_to_memory=mocker.Mock())
+
+    model.agents = [sender, r1, r2]
+
+    ret = speak_to(sender, "8,9", "note")
+
+    r1.memory.add_to_memory.assert_called_once()
+    r2.memory.add_to_memory.assert_called_once()
+    assert "note" in ret and "[8, 9]" in ret
+
+
 def test_move_one_step_invalid_direction():
     model = DummyModel()
     model.grid = MultiGrid(width=4, height=4, torus=False)

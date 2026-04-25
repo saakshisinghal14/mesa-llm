@@ -3,7 +3,10 @@
 from unittest.mock import Mock, patch
 
 from mesa.model import Model
+from mesa.space import MultiGrid
 
+from mesa_llm.llm_agent import LLMAgent
+from mesa_llm.reasoning.react import ReActReasoning
 from mesa_llm.recording.record_model import _attach_recorder_to_agents, record_model
 from mesa_llm.recording.simulation_recorder import SimulationRecorder
 
@@ -263,3 +266,25 @@ class TestRecordModelDecorator:
         assert model1.recorder != model2.recorder
         assert model1.recorder.output_dir == temp_dir / "model1"
         assert model2.recorder.output_dir == temp_dir / "model2"
+
+    def test_recorder_attached_to_llm_agents(self, temp_dir):
+        """LLMAgent instances get the recorder attached by @record_model (#218)."""
+
+        @record_model(output_dir=str(temp_dir))
+        class AgentModel(Model):
+            def __init__(self):
+                super().__init__(rng=42)
+                self.grid = MultiGrid(3, 3, torus=False)
+                agent = LLMAgent(
+                    model=self,
+                    reasoning=ReActReasoning,
+                    system_prompt="test",
+                )
+                self.grid.place_agent(agent, (1, 1))
+
+        model = AgentModel()
+        agent = next(iter(model.agents))
+
+        # The recorder must have been propagated to the LLMAgent
+        assert agent.recorder is model.recorder
+        assert isinstance(agent.recorder, SimulationRecorder)

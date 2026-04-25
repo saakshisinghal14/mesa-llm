@@ -227,7 +227,7 @@ class TestToolManager:
         assert "tool_b" not in tool_names
 
     def test_get_all_tools_schema_empty_list(self):
-        """Test that empty list returns all tools (current behavior)."""
+        """Test that empty list returns no tools (selected_tools=[] means 'no tools')."""
 
         @tool
         def test_tool(agent, x: int) -> int:
@@ -242,11 +242,10 @@ class TestToolManager:
 
         manager = ToolManager()
 
-        # Empty list should return all tools (current behavior)
-        all_schemas = manager.get_all_tools_schema()
+        # Empty list should return no tools — the user explicitly asked for none
         empty_list_schemas = manager.get_all_tools_schema([])
 
-        assert len(empty_list_schemas) == len(all_schemas)
+        assert len(empty_list_schemas) == 0
 
     def test_get_all_tools_schema_none(self):
         """Test that None returns all tools."""
@@ -288,7 +287,7 @@ class TestToolManager:
         # Test with nonexistent tools
         selected_tools = ["existing_tool", "nonexistent_tool"]
 
-        with pytest.raises(KeyError):
+        with pytest.raises(ValueError, match="Unknown tool name"):
             manager.get_all_tools_schema(selected_tools)
 
     def test_get_all_tools_schema_single_tool(self):
@@ -501,6 +500,99 @@ class TestToolManager:
         assert len(result) == 1
         assert result[0]["tool_call_id"] == "call_123"
         assert "Simple: test" in result[0]["response"]
+
+    def test_call_tools_type_coercion_float(self):
+        """Test coercion of float arguments passed as JSON strings."""
+        manager = ToolManager()
+
+        @tool
+        def float_tool(agent, amount: float) -> str:
+            """Float tool.
+            Args:
+                agent: The agent making the request
+                amount: Amount to format.
+            Returns:
+                Formatted amount.
+            """
+            return f"{amount:.2f}"
+
+        mock_agent = Mock()
+
+        mock_tool_call = Mock()
+        mock_tool_call.id = "call_float"
+        mock_tool_call.function.name = "float_tool"
+        mock_tool_call.function.arguments = '{"amount": "35.0"}'
+
+        mock_response = Mock()
+        mock_response.tool_calls = [mock_tool_call]
+
+        result = manager.call_tools(mock_agent, mock_response)
+
+        assert len(result) == 1
+        assert result[0]["tool_call_id"] == "call_float"
+        assert result[0]["response"] == "35.00"
+
+    def test_call_tools_type_coercion_float_with_string_annotation(self):
+        """Test coercion when annotations are stored as strings."""
+        manager = ToolManager()
+
+        @tool
+        def float_tool(agent, amount: "float") -> "str":
+            """Float tool.
+            Args:
+                agent: The agent making the request
+                amount: Amount to format.
+            Returns:
+                Formatted amount.
+            """
+            return f"{amount:.2f}"
+
+        mock_agent = Mock()
+
+        mock_tool_call = Mock()
+        mock_tool_call.id = "call_float_string_annotation"
+        mock_tool_call.function.name = "float_tool"
+        mock_tool_call.function.arguments = '{"amount": "35.0"}'
+
+        mock_response = Mock()
+        mock_response.tool_calls = [mock_tool_call]
+
+        result = manager.call_tools(mock_agent, mock_response)
+
+        assert len(result) == 1
+        assert result[0]["tool_call_id"] == "call_float_string_annotation"
+        assert result[0]["response"] == "35.00"
+
+    def test_call_tools_type_coercion_int(self):
+        """Test coercion of int arguments passed as JSON strings."""
+        manager = ToolManager()
+
+        @tool
+        def int_tool(agent, count: int) -> int:
+            """Int tool.
+            Args:
+                agent: The agent making the request
+                count: Count to increment.
+            Returns:
+                Incremented count.
+            """
+            return count + 1
+
+        mock_agent = Mock()
+
+        mock_tool_call = Mock()
+        mock_tool_call.id = "call_int"
+        mock_tool_call.function.name = "int_tool"
+        mock_tool_call.function.arguments = '{"count": "5"}'
+
+        mock_response = Mock()
+        mock_response.tool_calls = [mock_tool_call]
+
+        result = manager.call_tools(mock_agent, mock_response)
+
+        assert len(result) == 1
+        assert result[0]["tool_call_id"] == "call_int"
+        assert result[0]["response"] == "6"
 
     def test_call_tools_no_response(self):
         """Test call_tools when tool returns None."""

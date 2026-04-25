@@ -46,7 +46,33 @@ This tutorial **focuses on reasoning output only**.
 Action execution and environments are intentionally deferred to later tutorials.
 
 ## Tutorial Setup
+
 Create and activate a virtual environment. Python version 3.12 or higher is required.
+
+This tutorial uses **Ollama** as the default LLM provider. To follow along, you must have Ollama installed, and the local server must be running at `http://localhost:11434`.
+
+1. **Install Ollama**: Follow the instructions at [ollama.com](https://ollama.com).
+2. **Pull the Model**: Open a terminal and run:
+   ```bash
+   ollama pull llama3
+   ```
+3. **Run Ollama**: Start Ollama and confirm the local server is available at `http://localhost:11434` before running the tutorial. If you are running Ollama manually from a terminal, you can use:
+   ```bash
+   ollama serve
+   ```
+
+   To verify that Ollama is responding and the model is available, you can use:
+   ```bash
+   ollama ls
+   ```
+
+   For platform-specific startup instructions and additional CLI commands, see the [Ollama docs](https://docs.ollama.com/) and [CLI reference](https://docs.ollama.com/cli).
+
+```{note}
+If you prefer to use a cloud-hosted provider like **OpenAI** or **Gemini**, you will need to provide an API key and update the `llm_model` parameter in the code accordingly (see [Basic LLM Setup](../apis/module_llm.md#basic-llm-setup)).
+
+This tutorial assumes the default Ollama endpoint at `http://localhost:11434`. For custom Ollama endpoints, see [Custom API Endpoints](../apis/module_llm.md#custom-api-endpoints).
+```
 
 ## Install Mesa-LLM and required packages
 
@@ -194,7 +220,7 @@ Each call to `model.step()` activates all agents once and prints their language-
 │ is the first step, so I should explore the environment to get a better understanding of it. I will    │
 │ decide to move one step in a random direction.                                                        │
 │    └── action : move_one_step                                                                         │
-╰────────────────────────────────────────────────
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
 
@@ -227,7 +253,3 @@ Try the following small exercises to better understand how agent reasoning works
 
 In this tutorial, actions are not executed and are shown only as part of the reasoning
 trace. Later tutorials will introduce environments and action execution.
-
-
-
-
