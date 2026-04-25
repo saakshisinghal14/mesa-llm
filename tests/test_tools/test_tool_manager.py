@@ -533,6 +533,37 @@ class TestToolManager:
         assert result[0]["tool_call_id"] == "call_float"
         assert result[0]["response"] == "35.00"
 
+    def test_call_tools_type_coercion_float_with_string_annotation(self):
+        """Test coercion when annotations are stored as strings."""
+        manager = ToolManager()
+
+        @tool
+        def float_tool(agent, amount: "float") -> "str":
+            """Float tool.
+            Args:
+                agent: The agent making the request
+                amount: Amount to format.
+            Returns:
+                Formatted amount.
+            """
+            return f"{amount:.2f}"
+
+        mock_agent = Mock()
+
+        mock_tool_call = Mock()
+        mock_tool_call.id = "call_float_string_annotation"
+        mock_tool_call.function.name = "float_tool"
+        mock_tool_call.function.arguments = '{"amount": "35.0"}'
+
+        mock_response = Mock()
+        mock_response.tool_calls = [mock_tool_call]
+
+        result = manager.call_tools(mock_agent, mock_response)
+
+        assert len(result) == 1
+        assert result[0]["tool_call_id"] == "call_float_string_annotation"
+        assert result[0]["response"] == "35.00"
+
     def test_call_tools_type_coercion_int(self):
         """Test coercion of int arguments passed as JSON strings."""
         manager = ToolManager()

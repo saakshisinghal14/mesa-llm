@@ -5,7 +5,7 @@ import inspect
 import json
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, get_type_hints
 
 from terminal_style import style
 
@@ -127,7 +127,10 @@ class ToolManager:
             expects_agent = "agent" in sig.parameters
 
             # Filter arguments to only those accepted by the function, with type coercion based on annotations
-            hints = getattr(function_to_call, "__annotations__", {})
+            try:
+                hints = get_type_hints(function_to_call)
+            except (NameError, AttributeError, TypeError):
+                hints = getattr(function_to_call, "__annotations__", {})
 
             coerce: dict[type, type] = {float: float, int: int}
             filtered_args = {}
