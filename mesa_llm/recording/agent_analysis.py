@@ -38,9 +38,10 @@ class AgentViewer:
         """Load simulation recording from file."""
         if self.recording_path.suffix == ".pkl":
             warnings.warn(
-                "Loading pickle recordings can execute arbitrary code. "
-                "Only load trusted local .pkl files.",
-                UserWarning,
+                "Pickle recording support is deprecated and will be removed "
+                "in a future release. Loading .pkl files can execute "
+                "arbitrary code. Use JSON recordings instead.",
+                FutureWarning,
                 stacklevel=2,
             )
             with open(self.recording_path, "rb") as f:

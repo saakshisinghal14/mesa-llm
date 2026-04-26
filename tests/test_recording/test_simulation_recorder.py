@@ -260,13 +260,13 @@ class TestSimulationRecorder:
         assert "123" in data["agent_summaries"]
 
     def test_save_pickle_format_warns(self, recorder, temp_dir):
-        """Test saving recording in pickle format warns."""
+        """Test saving recording in pickle format emits a deprecation warning."""
         recorder.model.max_steps = 10
         recorder.record_event("test_event", {"data": "test"})
 
         with pytest.warns(
-            UserWarning,
-            match="Saving recordings as pickle produces files that can execute arbitrary code",
+            FutureWarning,
+            match="Pickle recording support is deprecated",
         ):
             filepath = recorder.save(filename="test_recording.pkl", format="pickle")
 

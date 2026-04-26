@@ -206,7 +206,7 @@ class SimulationRecorder:
 
         Args:
             filename: Optional filename. If None, auto-generates based on format.
-            format: Save format, either "json" or "pickle".
+            format: Save format, either "json" or deprecated "pickle".
         """
         if format not in ["json", "pickle"]:
             raise ValueError("Format must be 'json' or 'pickle'")
@@ -281,10 +281,10 @@ class SimulationRecorder:
                 json.dump(export_data, f, indent=2, default=str)
         else:
             warnings.warn(
-                "Saving recordings as pickle produces files that can execute "
-                "arbitrary code when loaded. Only share or load trusted local "
-                ".pkl files.",
-                UserWarning,
+                "Pickle recording support is deprecated and will be removed "
+                "in a future release. Pickle files can execute arbitrary code "
+                "when loaded. Use JSON recordings instead.",
+                FutureWarning,
                 stacklevel=2,
             )
             with open(filepath, "wb") as f:

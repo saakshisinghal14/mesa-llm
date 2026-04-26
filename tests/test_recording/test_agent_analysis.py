@@ -28,12 +28,12 @@ class TestAgentViewer:
     def test_init_with_pickle_file_warns(
         self, temp_recording_file, sample_recording_data
     ):
-        """Test pickle recordings load with a warning."""
+        """Test pickle recordings load with a deprecation warning."""
         _, pkl_path = temp_recording_file
 
         with pytest.warns(
-            UserWarning,
-            match="Loading pickle recordings can execute arbitrary code",
+            FutureWarning,
+            match="Pickle recording support is deprecated",
         ):
             viewer = AgentViewer(str(pkl_path))
 
